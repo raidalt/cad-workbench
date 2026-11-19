@@ -1,0 +1,54 @@
+[project]
+name = "cli-cad"
+dynamic = ["version"]  # from crates/cad/Cargo.toml
+description = "Agent-first parametric CAD on Open CASCADE: Python scripts in; exact solids, renders, analysis and STEP/STL/3MF out"
+readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+requires-python = ">=3.12"
+dependencies = [
+    "cadquery-ocp>=8.0.1.1.0",
+    "numpy>=2.5.4",
+    "pillow>=13.0.0",
+]
+
+[project.urls]
+Repository = "https://github.com/raidalt/cad-workbench"
+Issues = "https://github.com/raidalt/cad-workbench/issues"
+
+[project.optional-dependencies]
+# stress analysis (`cad fea`): gmsh meshes (GPL, so optional), scikit-fem + scipy + pyamg solve
+fea = [
+    "gmsh>=4.13",
+    "scikit-fem>=10.0",
+    "scipy>=1.11",
+    "pyamg>=5.0",
+]
+
+# maturin builds one wheel per platform holding the `cad` package and the Rust `cad` / `cadd` binaries
+# (installed next to the environment's Python, which is how they find it)
+[build-system]
+requires = ["maturin>=1.9,<2"]
+build-backend = "maturin"
+
+[tool.maturin]
+bindings = "bin"
+manifest-path = "crates/cad/Cargo.toml"
+python-source = "src"
+module-name = "cad"
+strip = true
+
+[tool.uv]
+# rebuild the project (and its binaries) when the Rust sources change, not only pyproject.toml
+cache-keys = [{ file = "pyproject.toml" }, { file = "Cargo.toml" }, { file = "crates/**/*.rs" }, { file = "crates/**/Cargo.toml" }]
+
+[dependency-groups]
+dev = [
+    "lib3mf>=2.5.0",
+    "pytest>=9.2.0",
+    "gmsh>=4.13",
+    "scikit-fem>=10.0",
+    "scipy>=1.11",
+    "pyamg>=5.0",
+]
+

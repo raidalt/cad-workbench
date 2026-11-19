@@ -1,0 +1,37 @@
+id = "bent_tube"
+title = "Hollow tube with a tangent bend"
+category = "advanced"
+split = "dev"
+prompt = "Make one hollow 90 degree bent tube. Its centerline starts at (0,0,0) along +Z, turns toward +X with a 12 mm bend radius at the virtual corner (0,0,28), and ends at (32,0,28). OD 8, ID 5. Keep both ends open."
+
+[[checks]]
+type = "part_count"
+count = 1
+
+[[checks]]
+type = "valid"
+
+[[checks]]
+type = "bbox"
+size = [36, 8, 32]
+min = [-4, -4, 0]
+tol = 0.05
+
+[[checks]]
+type = "volume"
+expected = 1680.070879
+rel_tol = 0.005
+
+[[checks]]
+type = "points_inside"
+points = [[3.3, 0, 0.1], [0, 3.3, 12], [3.515, 3.3, 24.485], [31.9, 3.3, 28], [22, 0, 31.3]]
+
+[[checks]]
+type = "points_outside"
+points = [[0, 0, 0.1], [2.3, 0, 12], [3.515, 2.3, 24.485], [3.515, 4.2, 24.485], [31.9, 0, 28], [22, 0, 25.7]]
+
+# Inner and outer circumferences times centerline length, plus two annuli.
+[[checks]]
+type = "surface_area"
+expected = 2301.355562
+rel_tol = 0.005

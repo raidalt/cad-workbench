@@ -1,0 +1,124 @@
+/* Shared by the CAD workspace, project gallery, and embedded chat. */
+:root {
+  color-scheme: dark;
+  --cad-canvas: #10141a;
+  --cad-surface: #181d24;
+  --cad-control: #20262e;
+  --cad-hover: #2a323c;
+  --cad-line: #38424e;
+  --cad-line-hover: #647286;
+  --cad-divider: #2b333d;
+  --cad-text: #d3dce7;
+  --cad-heading: #eef2f7;
+  --cad-muted: #aab6c5;
+  --cad-secondary: #9aa8b9;
+  --cad-accent: #a6dec9;
+  --cad-accent-hover: #c4efde;
+  --cad-selected: #223e39;
+  --cad-on-accent: #122922;
+  --cad-success: #9bd6b5;
+  --cad-warning: #edbe79;
+  --cad-error: #f39b95;
+  --cad-radius: 5px;
+  --cad-surface-radius: 8px;
+  --cad-control-height: 28px;
+  --cad-font: Geist, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --cad-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+}
+
+:where(.cad-native-ui) button,
+:where(.cad-native-ui) select,
+:where(.cad-button, .cad-field) {
+  border: 1px solid var(--cad-line);
+  border-radius: var(--cad-radius);
+  background: var(--cad-control);
+  color: var(--cad-text);
+  font: 12px/1.4 var(--cad-font);
+}
+
+:where(.cad-native-ui) :where(button, select) { min-height: var(--cad-control-height); }
+
+:where(.cad-native-ui) button {
+  padding: 4px 9px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+:where(.cad-native-ui) select,
+:where(.cad-field) { padding: 4px 6px; max-width: 100%; }
+
+:where(.cad-button) { cursor: pointer; }
+
+:where(.cad-native-ui) button:where(:hover:not(:disabled)),
+:where(.cad-button, .cad-field):where(:hover:not(:disabled)) {
+  border-color: var(--cad-line-hover);
+  color: var(--cad-heading);
+}
+
+:where(.cad-native-ui) button:where(:active:not(:disabled)),
+:where(.cad-button):where(:active:not(:disabled)) { background: var(--cad-hover); }
+
+:where(.cad-native-ui) :where(button, select, input, summary):focus-visible,
+:where(.cad-button, .cad-field):focus-visible {
+  outline: 1px solid var(--cad-accent);
+  outline-offset: 2px;
+}
+
+:where(.cad-native-ui) :where(button, select):disabled,
+:where(.cad-button, .cad-field):disabled { opacity: .48; cursor: default; }
+
+.cad-button-primary {
+  color: var(--cad-on-accent);
+  background: var(--cad-accent);
+  border-color: transparent;
+  font-weight: 650;
+}
+.cad-button-primary:where(:hover:not(:disabled)) {
+  color: var(--cad-on-accent);
+  background: var(--cad-accent-hover);
+  border-color: transparent;
+}
+.cad-button-ghost {
+  background: transparent;
+  border-color: transparent;
+}
+.cad-button-ghost:where(:hover:not(:disabled)) {
+  background: var(--cad-hover);
+  border-color: transparent;
+}
+.cad-button[aria-pressed="true"] {
+  background: var(--cad-selected);
+  color: var(--cad-accent);
+  border-color: transparent;
+}
+
+.cad-surface {
+  background: var(--cad-surface);
+  border: 1px solid var(--cad-line);
+  border-radius: var(--cad-surface-radius);
+}
+.cad-section-heading {
+  color: var(--cad-heading);
+  font-size: 12px;
+  line-height: 1.4;
+  font-weight: 650;
+}
+.cad-readout { font-variant-numeric: tabular-nums; }
+.cad-status { color: var(--cad-muted); }
+.cad-status[data-tone="success"] { color: var(--cad-success); }
+.cad-status[data-tone="warning"] { color: var(--cad-warning); }
+.cad-status[data-tone="error"] { color: var(--cad-error); }
+
+.cad-button-secondary { background: var(--cad-hover); }
+.cad-button-danger {
+  background: color-mix(in srgb, var(--cad-error) 14%, var(--cad-surface));
+  color: var(--cad-error);
+}
+.cad-button-link {
+  background: transparent;
+  border-color: transparent;
+  color: var(--cad-accent);
+}
+.cad-button-link:hover { text-decoration: underline; }
+.cad-composer { background: var(--cad-control); }
+.cad-composer:focus-within { border-color: var(--cad-accent); }

@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Projects · CAD</title>
+  <link rel="stylesheet" href="/static/design-system.css">
+  <link rel="stylesheet" href="/static/style.css">
+  <link rel="stylesheet" href="/static/projects.css">
+  <script type="module" src="/static/projects.js"></script>
+</head>
+<body class="cad-native-ui gallery-page">
+  <main class="gallery">
+    <header class="gallery-header">
+      <h1>Projects</h1>
+      <button class="cad-button-primary gallery-primary" id="new-project" type="button">New project</button>
+    </header>
+    <div class="library-tools" role="search" aria-label="Find projects" hidden>
+      <input class="cad-field" type="search" id="project-filter" aria-label="Find a project" placeholder="Find a project…">
+      <select id="project-order" aria-label="Sort projects">
+        <option value="recent">Recently modified</option>
+        <option value="name">Name (A–Z)</option>
+      </select>
+    </div>
+    <p id="gallery-message" role="status">Loading projects…</p>
+    <ul class="project-grid" aria-label="Your projects" id="project-grid"></ul>
+  </main>
+
+  <dialog class="cad-surface" id="project-dialog" aria-labelledby="dialog-heading">
+    <form id="project-form">
+      <h2 id="dialog-heading">New project</h2>
+      <label for="project-title">Project name</label>
+      <input class="cad-field" id="project-title" maxlength="80" required autofocus>
+      <p id="project-error" role="alert"></p>
+      <div class="dialog-actions">
+        <button id="cancel-project" type="button">Cancel</button>
+        <button class="cad-button-primary gallery-primary" id="save-project" type="submit">Create project</button>
+      </div>
+    </form>
+  </dialog>
+</body>
+</html>

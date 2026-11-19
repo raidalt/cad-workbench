@@ -1,0 +1,25 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+/target/
+.cad/
+renders/
+out/
+eval-runs/
+*.egg-info/
+.DS_Store
+stress-runs/
+dist/
+/*.log
+/result.json
+junit.xml
+slicer-compat-report.*
+
+# Turbopack workspace cache
+/.next/
+
+.cache/
+.local-cad/
+.env
+.env.*

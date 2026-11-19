@@ -1,0 +1,54 @@
+id = "captive_spinner"
+title = "Print-in-place indexing spinner"
+category = "assembly"
+split = "dev"
+prompt = """Make a 36 mm diameter, 6 mm high two-part print-in-place index spinner with four equally spaced 3 mm diameter through-holes on a 26 mm pitch circle in the outer ring. Name the bodies hub and rotor. Both start on the same bed, axis along Z. Need at least 0.40 mm shortest clearance and positive capture in both axial directions. No support, pins or assembly. Round the grip outline."""
+
+[[checks]]
+type = "part_count"
+names = ["hub", "rotor"]
+count = 2
+
+[[checks]]
+type = "valid"
+
+[[checks]]
+type = "python"
+code = '''
+def check(parts):
+    import math
+    from cad.analysis import cross_section
+    from cad.printability import report
+    hub, rotor = parts["hub"], parts["rotor"]
+    if abs(rotor.bbox.width - 36) > .05 or abs(rotor.bbox.depth - 36) > .05:
+        return False, "incorrect rotor diameter"
+    if abs(max(p.bbox.zmax for p in parts.values()) - 6) > .05:
+        return False, "incorrect height"
+    for part in parts.values():
+        if abs(part.bbox.zmin) > .01 or cross_section(part.shape, "z", .1)["area"] < 1:
+            return False, f"{part.name} has no usable first-layer footprint"
+        if part.print_frame()[0][2] < .9999 or report(part)["overhang"]["area_mm2"] > .01:
+            return False, f"{part.name} has an incompatible orientation or an overhang below 45 degrees"
+    holes = [h for h in rotor.find_holes() if abs(h["diameter"]-3) < .05
+             and abs(h["axis"][2]) > .999 and abs(h["depth"]-rotor.bbox.height) < .05]
+    if len(holes) != 4 or any(abs(math.hypot(*h["position"][:2])-13) > .05 for h in holes):
+        return False, "marker holes missing or off pitch circle"
+    angles = sorted(math.degrees(math.atan2(h["position"][1],h["position"][0])) for h in holes)
+    if any(abs((angles[(i+1)%4]-angle)%360 - 90) > .5 for i,angle in enumerate(angles)):
+        return False, "uneven marker spacing"
+    for angle in range(0,360,15):
+        posed = rotor.copy()
+        if angle:
+            posed.rotate(angle, axis="z")
+        if hub.distance_to(posed) < .4-1e-6:
+            return False, f"running clearance below 0.40 mm at {angle} degrees"
+    for sign in (-1, 1):
+        for step in range(1, 25):
+            moved = rotor.copy()
+            moved.translate((0, 0, sign * step * .25))
+            if hub.interference(moved) > .001:
+                break
+        else:
+            return False, f"no axial stop in direction {sign}"
+    return True, "floors, markers, rotation and both axial stops passed"
+'''

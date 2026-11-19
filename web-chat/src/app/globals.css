@@ -1,0 +1,285 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+@import "streamdown/styles.css";
+@import "../../../src/cad/web/design-system.css";
+
+/* Streamdown ships utility classes in JS; let Tailwind see them. */
+@source "../../node_modules/streamdown/dist/*.js";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --font-heading: var(--font-sans);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-foreground: var(--foreground);
+  --color-background: var(--background);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+:root {
+  --mono: var(--cad-mono);
+  --background: var(--cad-surface);
+  --foreground: var(--cad-text);
+  --card: var(--cad-surface);
+  --card-foreground: var(--cad-heading);
+  --popover: var(--cad-surface);
+  --popover-foreground: var(--cad-heading);
+  --primary: var(--cad-accent);
+  --primary-foreground: var(--cad-on-accent);
+  --secondary: var(--cad-hover);
+  --secondary-foreground: var(--cad-heading);
+  --muted: var(--cad-control);
+  --muted-foreground: var(--cad-muted);
+  --accent: var(--cad-selected);
+  --accent-foreground: var(--cad-accent);
+  --destructive: var(--cad-error);
+  --border: var(--cad-line);
+  --input: var(--cad-hover);
+  --ring: var(--cad-accent);
+  --chart-1: var(--cad-accent);
+  --chart-2: var(--cad-success);
+  --chart-3: var(--cad-warning);
+  --chart-4: var(--cad-error);
+  --chart-5: var(--cad-secondary);
+  --sidebar: var(--cad-surface);
+  --sidebar-foreground: var(--cad-text);
+  --sidebar-primary: var(--cad-accent);
+  --sidebar-primary-foreground: var(--cad-on-accent);
+  --sidebar-accent: var(--cad-selected);
+  --sidebar-accent-foreground: var(--cad-accent);
+  --sidebar-border: var(--cad-line);
+  --sidebar-ring: var(--cad-accent);
+  --radius: var(--cad-surface-radius);
+  --bg: var(--cad-surface);
+  --panel: var(--cad-surface);
+  --panel-2: var(--cad-control);
+  --panel-3: var(--cad-hover);
+  --line: var(--cad-line);
+  --line-hover: var(--cad-line-hover);
+  --line-soft: var(--cad-divider);
+  --text: var(--cad-text);
+  --text-strong: var(--cad-heading);
+  --dim: var(--cad-muted);
+  --dim-2: var(--cad-secondary);
+  --accent-soft: var(--cad-selected);
+  --ok: var(--cad-success);
+  --warn: var(--cad-warning);
+  --err: var(--cad-error);
+  --font-sans: var(--cad-font);
+  --font-mono: var(--cad-mono);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  html,
+  body {
+    height: 100%;
+    margin: 0;
+  }
+
+  html {
+    font-family: var(--font-sans);
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    overflow: hidden;
+    font: 13px/1.55 var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  button,
+  input,
+  textarea,
+  select {
+    font: inherit;
+    color: inherit;
+  }
+
+  ::selection {
+    background: var(--cad-selected);
+    color: var(--cad-heading);
+  }
+
+  ::-webkit-scrollbar {
+    width: 9px;
+    height: 9px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--cad-line);
+    border: 2px solid var(--panel);
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #505050;
+  }
+}
+
+/* ---------------------------------------------------------------- prose */
+
+.chat-prose {
+  font-size: 13px;
+  line-height: 1.62;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.chat-prose p {
+  margin: 0 0 7px;
+}
+.chat-prose p:last-child {
+  margin-bottom: 0;
+}
+.chat-prose ul,
+.chat-prose ol {
+  margin: 3px 0 7px;
+  padding-left: 17px;
+}
+.chat-prose li {
+  margin: 1px 0;
+}
+.chat-prose li::marker {
+  color: var(--dim-2);
+}
+.chat-prose h1,
+.chat-prose h2,
+.chat-prose h3,
+.chat-prose h4 {
+  margin: 8px 0 4px;
+  color: var(--text-strong);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+.chat-prose strong {
+  color: var(--text-strong);
+  font-weight: 600;
+}
+.chat-prose em {
+  color: var(--text-strong);
+}
+.chat-prose a {
+  color: var(--primary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.chat-prose blockquote {
+  margin: 4px 0;
+  border-left: 2px solid var(--line);
+  padding-left: 7px;
+  color: var(--dim);
+}
+.chat-prose hr {
+  margin: 8px 0;
+  border: 0;
+  border-top: 1px solid var(--line-soft);
+}
+.chat-prose table {
+  margin: 5px 0;
+  border-collapse: collapse;
+  font-size: 10px;
+}
+.chat-prose th,
+.chat-prose td {
+  border: 1px solid var(--line);
+  padding: 2px 5px;
+  text-align: left;
+}
+.chat-prose code {
+  border: 1px solid var(--line-soft);
+  background: #0c1014;
+  padding: 0 3px;
+  color: var(--text-strong);
+  font-family: var(--mono);
+  font-size: 10.5px;
+}
+.chat-prose pre {
+  margin: 0;
+}
+
+/* Streamdown's own code block wrapper never renders for python fences;
+   our CodeBlock takes over. Keep any remaining plain <pre> compact. */
+.chat-prose pre:not([data-slot="code-block-content"]) {
+  overflow-x: auto;
+  border: 1px solid var(--line-soft);
+  background: #0c1014;
+  padding: 5px 7px;
+  font-size: 10.5px;
+}
+
+/* ---------------------------------------------------------------- code */
+
+.python-plain {
+  color: var(--text);
+  white-space: pre;
+}
+
+.python-comment {
+  color: #9aa8b9;
+}
+.python-string {
+  color: #9ec79a;
+}
+.python-keyword {
+  color: #a6dec9;
+}
+.python-number {
+  color: #edbe79;
+}
+.python-builtin {
+  color: #d3dce7;
+}
+.python-decorator {
+  color: #b08fc4;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.001ms !important;
+  }
+}

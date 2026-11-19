@@ -1,0 +1,37 @@
+id = "eccentric_reducer"
+title = "Eccentric open reducer"
+category = "advanced"
+split = "dev"
+prompt = "Make a hollow eccentric straight-sided circular reducer, from OD 32 and ID 28 at (0,0,0) to OD 18 and ID 14 at (8,0,30). Its two openings are parallel to XY. Preserve the offset and continuous passage."
+
+[[checks]]
+type = "part_count"
+count = 1
+
+[[checks]]
+type = "valid"
+
+[[checks]]
+type = "bbox"
+size = [33, 32, 30]
+min = [-16, -16, 0]
+tol = 0.05
+
+[[checks]]
+type = "volume"
+expected = 4335.397862
+rel_tol = 0.005
+
+[[checks]]
+type = "points_inside"
+points = [[-14.8, 0, 0.1], [4, 11.5, 15], [15.5, 0, 15], [8, 8, 29.9]]
+
+[[checks]]
+type = "points_outside"
+points = [[0, 0, 0.1], [4, 10.3, 15], [-7, 0, 29.9], [8, 0, 29.9], [8, 9.2, 29.9]]
+
+# Two end annuli plus the inner and outer ruled surfaces: integrate mean radius times hypot(30, -7 + 8*cos(theta)).
+[[checks]]
+type = "surface_area"
+expected = 4811.402406
+rel_tol = 0.005

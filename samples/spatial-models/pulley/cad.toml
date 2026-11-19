@@ -1,0 +1,3 @@
+[project]
+name = "Turned spool"
+entry = "model.py"

@@ -1,0 +1,3 @@
+[project]
+name = "Pocket coin"
+entry = "model.py"

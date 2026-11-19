@@ -1,0 +1,3 @@
+[project]
+name = "Seven-blade blower wheel"
+entry = "model.py"

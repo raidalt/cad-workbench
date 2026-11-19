@@ -1,0 +1,3 @@
+[project]
+name = "Enclosure and locating lid"
+entry = "model.py"

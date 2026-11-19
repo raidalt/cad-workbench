@@ -1,0 +1,37 @@
+id = "turned_spool"
+title = "Turned spool with flared ends"
+category = "advanced"
+split = "dev"
+prompt = "Design one turned cable spool around Z, through bore diameter 6. Use this axial outline: bottom flange diameter 28 from z=0 to 2, linear taper down to diameter 16 at z=5, straight hub to z=15, linear flare back to diameter 28 at z=18, top flange to z=20. No other details."
+
+[[checks]]
+type = "part_count"
+count = 1
+
+[[checks]]
+type = "valid"
+
+[[checks]]
+type = "bbox"
+size = [28, 28, 20]
+min = [-14, -14, 0]
+tol = 0.05
+
+[[checks]]
+type = "volume"
+expected = 6245.486195
+rel_tol = 0.005
+
+[[checks]]
+type = "points_inside"
+points = [[13.8, 0, 0.1], [10.8, 0, 3.5], [0, 7.8, 10], [0, 10.8, 16.5], [13.8, 0, 19.9]]
+
+[[checks]]
+type = "points_outside"
+points = [[0, 0, 0.1], [2.8, 0, 10], [0, 0, 19.9], [11.2, 0, 3.5], [0, 8.2, 10], [0, 11.2, 16.5]]
+
+# Two end annuli, flange rims, hub, bore and two straight conical frusta.
+[[checks]]
+type = "surface_area"
+expected = 3333.735517
+rel_tol = 0.005
