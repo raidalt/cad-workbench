@@ -47,7 +47,7 @@ jobs:
           target: ${{ matrix.target }}
           manylinux: ${{ matrix.manylinux || 'auto' }}
           args: --release --out dist
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: wheel-${{ matrix.name }}
           path: dist/*.whl
@@ -70,7 +70,7 @@ jobs:
             scripts/install-release.sh > install.sh
           sh -n install.sh
           grep -n '^VERSION=\|^WHEELS=' install.sh
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: installer
           path: install.sh
