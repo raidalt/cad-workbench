@@ -1,16 +1,3 @@
-<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>CAD Workspace</title>
-<link rel="stylesheet" href="/static/design-system.css">
-<link rel="stylesheet" href="/static/style.css">
-<script type="importmap">
-{"imports":{"three":"/static/vendor/three.module.min.js","three/addons/":"/static/vendor/","three/webgpu":"/static/vendor/three.webgpu.min.js"}}
-</script>
-</head>
-<body class="cad-native-ui">
 <div id="app">
   <header id="topbar">
     <div class="project-heading">
@@ -178,13 +165,7 @@
             <button class="cad-button-ghost" type="button" id="chat-close" title="Close chat (Escape)" aria-label="Close chat">×</button>
           </header>
           <div id="chat-slot">
-            <iframe id="chat-frame" title="Design chat"></iframe>
-            <div id="chat-loading"><span class="spinner"></span><span>loading chat…</span></div>
-            <div id="chat-fallback" class="hidden" role="alert">
-              <div id="chat-fallback-title">chat app not available</div>
-              <div id="chat-fallback-message" class="tiny dim"></div>
-              <button type="button" id="chat-retry">reload</button>
-            </div>
+            <div id="chat-root"></div>
           </div>
         </div>
       </aside>
@@ -278,6 +259,3 @@
   </footer>
 </div>
 <div id="toast" class="hidden" role="status"></div>
-<script type="module" src="/static/app.js"></script>
-</body>
-</html>

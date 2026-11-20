@@ -968,8 +968,8 @@ class Handler(BaseHTTPRequestHandler):
         u = urlparse(self.path)
         q = {k: v[-1] for k, v in parse_qs(u.query).items()}
         try:
-            if u.path in ("/", "/index.html"):
-                return self._static("index.html")
+            if u.path in ("/", "/index.html", "/static/index.html"):
+                return self._static("chat/index.html")
             if u.path in ("/projects", "/projects/"):
                 if self.gallery is not None:
                     return self._static("projects.html")

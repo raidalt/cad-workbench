@@ -1,3 +1,4 @@
-:HL["/static/chat/_next/static/chunks/19t2g7yj-rxtu.css","style"]
+:HL["/static/chat/_next/static/chunks/2bryqh1c7m4dx.css","style"]
+:HL["/static/style.css","style"]
 1:[["children",{"s":"__PAGE__","h":160}]]
-0:{"b":"S-kirsYECE_5O6VUQ3dKd","t":{"t":{"s":"","h":80,"c":"$Q1"}}}
+0:{"b":"0yt8_yn-mb82ryMGHO5oQ","t":{"t":{"s":"","h":80,"c":"$Q1"}}}

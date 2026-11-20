@@ -15,7 +15,7 @@ const PALETTE = ['#9eb0c7', '#d99e6b', '#8cbf8c', '#cc8ca6', '#bfb880', '#8ca6d9
 const REFERENCE_COLOR = '#dbd6b8';
 const EDGE_COLOR = 0x0b0e12;
 const BG_COLOR = 0x10141a;
-const WORKSPACE_PATH = window.location.pathname.match(/^\/workspace\/[^/]+/)?.[0] ?? '';
+const WORKSPACE_PATH = window.location.pathname.match(/^\/(?:projects|workspace)\/[^/]+/)?.[0] ?? '';
 const apiPath = (path) => WORKSPACE_PATH + path;
 
 const COMPACT_PANELS_QUERY = '(max-width: 960px)';
@@ -314,7 +314,7 @@ const store = {
   activePart: null,
   selection: null,
   featureFaceIds: null,
-  chatSelection: null,
+  get chatSelection() { return window.cadWorkspace.selection; },
   hover: null,
   hoverPoint: null,
   hoverScheduled: false,
@@ -397,13 +397,7 @@ const store = {
   },
   chat: {
     open: true,
-    ready: false,
     pendingChatDraft: '',
-    loaded: false,
-    failed: false,
-    timer: 0,
-    token: 0,
-    probing: false,
   },
 };
 
@@ -4240,8 +4234,7 @@ function pushNote(level, message) {
 // --------------------------------------------------------------------- events
 
 function connectEvents() {
-  if (store.source) store.source.close();
-  const source = new EventSource(apiPath('/api/events'));
+  const source = window.cadWorkspace.events;
   store.source = source;
 
   source.onopen = () => {
@@ -4358,8 +4351,6 @@ function handleBuildError(payload) {
 
 // --------------------------------------------------------------------- chat slot
 
-const CHAT_FRAME_URL = new URL('/static/chat/', window.location.origin);
-if (WORKSPACE_PATH) CHAT_FRAME_URL.searchParams.set('workspace', WORKSPACE_PATH);
 const CHAT_OPEN_KEY = 'cad.chat.open';
 
 function setChatOpen(open, options = {}) {
@@ -4376,14 +4367,9 @@ function setChatOpen(open, options = {}) {
         setPanelOpen('left', false);
         setPanelOpen('right', false);
       }
-      const frame = byId('chat-frame');
-      if (frame) {
-        try { frame.focus(); } catch { /* not focusable yet */ }
-      }
+      byId('chat-root').querySelector('textarea')?.focus();
     }
   } else {
-    const frame = byId('chat-frame');
-    if (frame) frame.blur();
     if (options.focus) byId('btn-chat').focus();
   }
   if (options.persist !== false) {
@@ -4393,168 +4379,21 @@ function setChatOpen(open, options = {}) {
   }
 }
 
-function hideChatFallback() {
-  const node = byId('chat-fallback');
-  if (node) node.classList.add('hidden');
-}
-
-function showChatLoading() {
-  hideChatFallback();
-  const node = byId('chat-loading');
-  if (node) node.classList.remove('hidden');
-}
-
-function failChatFrame(message) {
-  if (store.chat.timer) {
-    clearTimeout(store.chat.timer);
-    store.chat.timer = 0;
-  }
-  store.chat.failed = true;
-  store.chat.loaded = false;
-  store.chat.probing = false;
-  const loading = byId('chat-loading');
-  if (loading) loading.classList.add('hidden');
-  const node = byId('chat-fallback');
-  if (!node) return;
-  node.classList.remove('hidden');
-  setText(byId('chat-fallback-title'), 'chat app not available');
-  setText(byId('chat-fallback-message'),
-    message || `expected ${CHAT_FRAME_URL} — is the React app built?`);
-}
-
-function attachChatEscape() {
-  const frame = byId('chat-frame');
-  if (!frame) return;
-  try {
-    const documentInside = frame.contentDocument;
-    if (!documentInside || documentInside.__cadChatEscape) return;
-    documentInside.__cadChatEscape = true;
-    documentInside.addEventListener('keydown', (event) => {
-      if (event.key === 'Escape') {
-        event.preventDefault();
-        if (store.chatSelection || store.selection || store.bedPreview.active) {
-          clearSelection();
-          return;
-        }
-        setChatOpen(false);
-        byId('btn-chat').focus();
-      }
-    }, true);
-  } catch { /* cross-origin: Escape still works from the page shell */ }
-}
-
-async function verifyChatFrame(token) {
-  store.chat.probing = true;
-  try {
-    const response = await fetch(CHAT_FRAME_URL, { cache: 'no-store' });
-    if (token !== store.chat.token) return;
-    if (!response.ok) {
-      failChatFrame(`chat app not found (HTTP ${response.status}) — expected ${CHAT_FRAME_URL}`);
-      return;
-    }
-    store.chat.probing = false;
-    store.chat.loaded = true;
-    store.chat.failed = false;
-    hideChatFallback();
-    const loading = byId('chat-loading');
-    if (loading) loading.classList.add('hidden');
-  } catch (error) {
-    if (token !== store.chat.token) return;
-    failChatFrame(`cannot reach the chat app: ${error.message || error}`);
-  }
-}
-
-function reloadChatFrame() {
-  const frame = byId('chat-frame');
-  if (!frame) return;
-  store.chat.token += 1;
-  const token = store.chat.token;
-  store.chat.ready = false;
-  store.chat.loaded = false;
-  store.chat.failed = false;
-  store.chat.probing = false;
-  showChatLoading();
-  if (store.chat.timer) clearTimeout(store.chat.timer);
-  store.chat.timer = setTimeout(() => {
-    if (token === store.chat.token && !store.chat.loaded) {
-      failChatFrame('the chat app did not load in time — is /static/chat/ built?');
-    }
-  }, 3000);
-  try {
-    const source = new URL(CHAT_FRAME_URL);
-    source.searchParams.set('reload', String(Date.now()));
-    frame.src = source.href;
-  } catch (error) {
-    failChatFrame(`cannot load the chat app: ${error.message || error}`);
-  }
-}
-
-function onChatFrameLoad() {
-  if (store.chat.timer) {
-    clearTimeout(store.chat.timer);
-    store.chat.timer = 0;
-  }
-  attachChatEscape();
-  postBoardState();
-  postSelection();
-  verifyChatFrame(store.chat.token);
-}
-
-/**
- * Tell the chat which revision is actually on screen. apiPath(`/api/state`) only knows
- * head, so without this the chat would claim the head revision is displayed
- * while the selector shows an older one.
- */
 function postBoardState() {
-  const frame = byId('chat-frame');
   const doc = store.doc;
-  if (!frame || !frame.contentWindow || !doc) return;
-  try {
-    frame.contentWindow.postMessage({
-      type: 'cad:board',
-      revision: doc.revision != null ? Number(doc.revision) : null,
-      head: doc.head != null ? Number(doc.head) : null,
-      empty: revisionIsEmpty(doc),
-    }, window.location.origin);
-  } catch { /* the frame may be gone */ }
+  if (doc) window.cadWorkspace.showBoard({ revision: doc.revision, head: doc.head, empty: revisionIsEmpty(doc) });
 }
 
 function setChatSelection(selection) {
   store.featureFaceIds = null;
-  store.chatSelection = selection;
-  postSelection();
+  window.cadWorkspace.select(selection);
 }
 
 function postSelection(focus = false) {
-  const frame = byId('chat-frame');
-  if (!frame || !frame.contentWindow) return;
-  try {
-    frame.contentWindow.postMessage({
-      type: 'cad:selection',
-      selection: store.chatSelection,
-      ...(focus ? { focus: true } : {}),
-    }, window.location.origin);
-  } catch { /* the frame may be gone */ }
+  if (focus) window.cadWorkspace.dispatchEvent(new Event('focus-chat'));
 }
 
-function onChatMessage(event) {
-  const frame = byId('chat-frame');
-  if (!frame || event.source !== frame.contentWindow) return;
-  if (event.origin !== window.location.origin) return;
-  const data = event.data;
-  if (!data || typeof data !== 'object') return;
-  if (data.type === 'cad:request-selection') {
-    store.chat.ready = true;
-    postBoardState();
-    postSelection();
-    postChatDraft();
-    return;
-  }
-  if (data.type === 'cad:clear-selection') {
-    clearSelection();
-    return;
-  }
-  if (data.type !== 'cad:hide-parts') return;
+function hidePartsFromChat() {
   clearSelection();
   const names = Object.keys((store.doc && store.doc.parts) || {});
   let changed = 0;
@@ -4571,16 +4410,11 @@ function onChatMessage(event) {
   pushNote('info', changed
     ? `chat hid ${changed} part${changed === 1 ? '' : 's'}`
     : 'chat hid all parts (already hidden)');
-  try {
-    frame.contentWindow.postMessage({ type: 'cad:parts-hidden', count: changed }, window.location.origin);
-  } catch { /* the frame may be gone */ }
 }
 
 function postChatDraft() {
-  if (!store.chat.ready || !store.chat.pendingChatDraft) return;
-  const frame = byId('chat-frame').contentWindow;
-  if (!frame) return;
-  frame.postMessage({ type: 'cad:stress-draft', text: store.chat.pendingChatDraft }, window.location.origin);
+  if (!store.chat.pendingChatDraft) return;
+  window.cadWorkspace.dispatchEvent(new CustomEvent('stress-draft', { detail: store.chat.pendingChatDraft }));
   store.chat.pendingChatDraft = '';
 }
 
@@ -4593,16 +4427,16 @@ function initChatShell() {
 
   byId('btn-chat').addEventListener('click', () => setChatOpen(!store.chat.open, { focus: true }));
   byId('chat-close').addEventListener('click', () => setChatOpen(false, { focus: true }));
-  byId('chat-reload').addEventListener('click', reloadChatFrame);
-  byId('chat-retry').addEventListener('click', reloadChatFrame);
-
-  const frame = byId('chat-frame');
-  if (frame) {
-    frame.addEventListener('load', onChatFrameLoad);
-    frame.addEventListener('error', () => failChatFrame('the chat app failed to load'));
-  }
-  window.addEventListener('message', onChatMessage);
-  reloadChatFrame();
+  byId('chat-reload').addEventListener('click', () => window.cadWorkspace.dispatchEvent(new Event('reload-chat')));
+  window.cadWorkspace.addEventListener('clear-selection', clearSelection);
+  window.cadWorkspace.addEventListener('hide-parts', hidePartsFromChat);
+  window.cadWorkspace.addEventListener('refresh-board', scheduleStateRefresh);
+  byId('chat-root').addEventListener('keydown', event => {
+    if (event.key !== 'Escape') return;
+    event.stopPropagation();
+    if (store.chatSelection || store.selection || store.bedPreview.active) clearSelection();
+    else setChatOpen(false, { focus: true });
+  });
 }
 
 // --------------------------------------------------------------------- screenshot / actions
@@ -5076,7 +4910,6 @@ function bindUi() {
 function focusInChat(target) {
   const chat = byId('chat');
   if (!chat || !target) return false;
-  if (target.id === 'chat-frame') return true;
   return chat.contains(target);
 }
 
