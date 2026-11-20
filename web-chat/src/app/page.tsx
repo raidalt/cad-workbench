@@ -1,9 +1,11 @@
-import { ChatApp } from "@/components/chat/chat-app";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { WorkspacePanel } from "./workspace-panel";
 
 export default function Page() {
-  return (
-    <main className="h-dvh min-h-0 bg-background">
-      <ChatApp />
-    </main>
-  );
+  const markup = readFileSync(join(process.cwd(), "src/app/workspace.html"), "utf8");
+  return <>
+    <div dangerouslySetInnerHTML={{ __html: markup }} />
+    <WorkspacePanel />
+  </>;
 }

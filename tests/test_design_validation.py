@@ -295,3 +295,24 @@ def test_already_cancelled_validation_does_not_start_a_subprocess(tmp_path, monk
     monkeypatch.setattr(validation.subprocess, "Popen", unexpected_process)
     result = validate_candidate(project(tmp_path), PLATE, cancelled=lambda: True)
     assert result["error"]["code"] == "VALIDATION_CANCELLED"
+
+
+def test_data_asset_change_invalidates_build_and_is_in_revision(tmp_path):
+    from cad.engine import ProjectSession
+    root = project(tmp_path)
+    (root / "model.py").write_text("""from pathlib import Path
+from cad import Part
+def build():
+    body = Part("box")
+    body.box(int(Path("width.dat").read_text()), 10, 10)
+    return body
+""")
+    asset = root / "width.dat"
+    session = ProjectSession(root)
+    for width in (10, 20):
+        asset.write_text(str(width))
+        result = session.build()
+        assert not result["cached"]
+        rev = result["revision"]
+        assert (session.store.revision_dir(rev) / "source/width.dat").read_text() == str(width)
+        assert session.store.manifest(rev)["parts"]["box"]["summary"]["volume"] == width * 100

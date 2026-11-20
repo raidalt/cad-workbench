@@ -61,6 +61,12 @@ class ProjectSession:
     def config(self) -> ProjectConfig:
         return ProjectConfig.load(self.root)
 
+    def revision_config(self, revision: int) -> ProjectConfig:
+        source = self.store.revision_dir(revision) / "source"
+        if (source / "cad.toml").is_file():
+            return ProjectConfig.load(source, default_name=self.root.name)
+        return self.config
+
     # ------------------------------------------------------------------ build
     def build_key(self, params: dict) -> tuple[str, str, dict]:
         src_hash, files = self.store.source_hash()
@@ -72,7 +78,8 @@ class ProjectSession:
         entry = self.root / cfg.entry
         if not entry.exists():
             raise CadError(NOT_FOUND, f"entry script {cfg.entry} not found in {self.root}", hint="set [project].entry in cad.toml")
-        params = dict(read_overlay(self.root))
+        project_overrides = read_overlay(self.root)
+        params = dict(project_overrides)
         params.update(overrides or {})
         key, src_hash, files = self.build_key(params)
         t0 = time.perf_counter()
@@ -120,8 +127,12 @@ class ProjectSession:
             src = tmp / "source"
             for rel, digest in files.items():
                 self.store.snapshot_file(self.root / rel, src / rel, digest)
+            if self.store.source_hash()[0] != src_hash or read_overlay(self.root) != project_overrides:
+                raise CadError("STALE_SOURCE", "project inputs changed during the build",
+                               hint="rebuild the current files to publish a consistent revision")
             manifest = {
                 "revision": rev,
+                "project_overrides": project_overrides,
                 "key": key,
                 "created_at": now_iso(),
                 "project": self.config.name,
@@ -542,7 +553,8 @@ class ProjectSession:
         if not all_parts:
             raise CadError(NOT_FOUND, f"revision {r} has no parts",
                            hint="add geometry to the script, or choose a revision that has parts")
-        formats = formats or self.config.export_formats
+        cfg = self.revision_config(r)
+        formats = formats or cfg.export_formats
         valid = sorted(set(FORMATS.values()))
         for f in formats:
             if f not in valid:
@@ -561,11 +573,11 @@ class ProjectSession:
             for n in chosen:
                 if n not in all_parts:
                     raise CadError(NOT_FOUND, f"no part named '{n}'", details={"parts": list(all_parts)})
-            threemf_mode = threemf_mode or self.config.threemf_mode
-            threemf_for = threemf_for or self.config.threemf_for
-            dst = out / f"{self.config.name}.3mf"
+            threemf_mode = threemf_mode or cfg.threemf_mode
+            threemf_for = threemf_for or cfg.threemf_for
+            dst = out / f"{cfg.name}.3mf"
             threemf = export_3mf({n: all_parts[n] for n in chosen}, dst, mode=threemf_mode, tolerance=tolerance,
-                                 title=self.config.name, target=threemf_for)
+                                 title=cfg.name, target=threemf_for)
             files.append({"part": ",".join(chosen), "format": "3mf", "path": str(dst), "bytes": threemf["bytes"],
                           "materials": threemf["materials"], "mode": threemf_mode, "for": threemf_for,
                           "arranged": threemf["arranged"]})
@@ -942,23 +954,28 @@ class ProjectSession:
         self.store.set_head(r)
         return {"head": r, "note": "active revision changed; source files were not modified (use `cad restore` to restore sources)"}
 
-    def restore(self, rev, *, force: bool = False) -> dict:
+    def restore(self, rev, *, force: bool = False, remove_added: bool = False) -> dict:
         r = self.resolve_rev(rev)
         m = self.store.manifest(r)
         src = self.store.revision_dir(r) / "source"
         _, current = self.store.source_hash()
         changed = [f for f, h in m["source_files"].items() if current.get(f) != h]
-        if not changed:
+        added = sorted(current.keys() - m["source_files"].keys()) if remove_added else []
+        overlay = m.get("project_overrides", m.get("overrides", {}))
+        params_changed = read_overlay(self.root) != overlay
+        if not changed and not params_changed and not added:
             return {"revision": r, "restored": [], "note": "sources already match"}
         if not force:
-            raise CadError(INVALID_ARGUMENT, f"restoring revision {r} would overwrite {len(changed)} file(s)",
-                           hint="re-run with --force to overwrite", details={"files": changed})
+            raise CadError(INVALID_ARGUMENT, f"restoring revision {r} would replace working project inputs",
+                           hint="re-run with --force to restore the revision", details={"files": changed, "parameters": params_changed})
         for f in changed:
             dst = self.root / f
             dst.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(src / f, dst)
-        overlay = m.get("overrides", {})
-        write_overlay(self.root, overlay)
+        for f in added:
+            (self.root / f).unlink()
+        if params_changed:
+            write_overlay(self.root, overlay)
         self.store.set_head(r)
         return {"revision": r, "restored": changed, "params": overlay}
 

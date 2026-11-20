@@ -76,15 +76,9 @@ implementation (`cad/cli.py`): the daemon forwards argv to a worker that calls
 the same `main()` that standalone mode runs in-process, so standalone and
 daemon output are identical (an integration test compares them).
 
-**Live viewer: in-process engine + SSE, not the daemon.** `cad serve` is a human-facing viewport, and a
-viewer needs events *during* a build (a feature finished, a frame of the solid so far, progress), while
-the daemon protocol is one request in, one result out. Building in the serve process keeps the frame
-callback in-process, so a rebuild is the normal ~50 ms and a preview frame costs only its tessellation;
-the daemon and the agent path are untouched. Events go over Server-Sent Events and geometry is fetched as
-binary triangle arrays (`/api/mesh`, `/api/frame`), which avoids a websocket dependency and base64 bloat
-in the event stream, and the page is static ES modules with three.js vendored, so it works offline.
-Preview meshes are coarse (low tessellation) and memory-only: they are never written to `.cad/` or the
-revision cache, and with no viewer attached the hook costs one `is None` check per feature.
+**Local workspace.** One HTTP server serves the gallery, compiled Next.js workspace and binary geometry. Each library project has a stable URL under `/projects/{key}/`. Its worker runs the project engine, watcher and chat with a private Unix socket back to the server. Idle workers exit and the next request reopens their saved state. An explicit single-project CLI session can run the engine in-process. The CLI daemon keeps its existing request/response protocol.
+
+Three.js handles GPU interaction. React chat and the viewport share the displayed revision, selection and one server-sent event connection. Preview frames remain coarse, memory-only geometry. The Python renderer produces checked headless renders. See [hosted execution](../hosted/README.md) for the separate Sandbox job protocol.
 
 **Print readiness: geometry, not a slicer.** `cad print` answers "will this print, and where will it struggle"
 on every iteration, including on machines with no slicer installed. Mass comes from the solid volume and the
@@ -133,6 +127,8 @@ Requests to one project are serialised; projects run in parallel. A worker
 that dies while idle is replaced transparently; a crash during a command is
 reported as `WORKER_CRASHED` (exit 6) and the next command starts a new worker,
 which reloads the last successful revision from disk.
+
+Model inputs include ordinary files of any extension under the project directory. Put outputs under `out/` or `renders/` and use `[project].inputs` in `cad.toml` for extra relative file paths such as hidden assets. The watcher, cache, revisions and candidate validation use the same discovery logic. The root `params.toml` contributes effective parameter values to the build key.
 
 **Revisions and caches.** A build's identity is
 `sha256(source files, effective parameters, cad version, kernel)`. Identical

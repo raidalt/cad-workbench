@@ -449,7 +449,10 @@ def test_new_chat_preserves_model_and_removes_context(tmp_path, monkeypatch):
 def test_project_gallery_creates_renames_and_opens_isolated_workspace(tmp_path):
     root = write_project(tmp_path / "original", name="Original")
     with Service(root, port=0, poll=60, library=tmp_path) as svc:
-        wait_idle(svc)
+        end = time.monotonic() + 15
+        while not call(svc, "/api/state")[1].get("revision"):
+            assert time.monotonic() < end
+            time.sleep(.03)
         with urllib.request.urlopen(svc.url + "projects") as page:
             assert b"<h1>Projects</h1>" in page.read()
         original, = call(svc, "/api/projects")[1]["projects"]
@@ -464,16 +467,41 @@ def test_project_gallery_creates_renames_and_opens_isolated_workspace(tmp_path):
         assert call(svc, "/api/projects/create", {"name": 'Desk tray "v2"'})[1]["key"] != key
         assert call(svc, "/api/projects/rename", {"key": key, "name": "Cable tray"})[0] == 200
         assert call(svc, "/api/projects/open", {"key": ".."})[0] == 404
-        assert call(svc, "/api/projects/open", {"key": "original"})[1]["url"] == "/"
+        assert call(svc, "/api/projects/open", {"key": "original"})[1]["url"] == "/projects/original/"
 
         status, opened = call(svc, "/api/projects/open", {"key": key})
         assert status == 200, opened
         assert call(svc, "/api/projects/open", {"key": key})[1] == opened
-        with urllib.request.urlopen(opened["url"] + "api/state") as state:
+        with urllib.request.urlopen(urllib.parse.urljoin(svc.url, opened["url"]) + "api/state") as state:
             child = json.load(state)
         assert Path(child["root"]) == tmp_path / key
         assert child["empty"] and child["project_title"] == "Cable tray"
-        with urllib.request.urlopen(opened["url"] + "projects") as gallery:
+        with urllib.request.urlopen(urllib.parse.urljoin(svc.url, opened["url"]) + "projects") as gallery:
             assert gallery.url == svc.url + "projects"
         assert call(svc, "/api/state")[1]["revision"] == original["revision"]
         assert (root / "model.py").read_text() == MODEL
+
+
+def test_project_routes_survive_worker_exit_and_keep_projects_separate(tmp_path):
+    from concurrent.futures import ThreadPoolExecutor
+    one = write_project(tmp_path / "one", name="One")
+    two = write_project(tmp_path / "two", name="Two")
+    with Service(one, port=0, library=tmp_path) as svc:
+        def built(key):
+            end = time.monotonic() + 20
+            while time.monotonic() < end:
+                state = call(svc, f"/projects/{key}/api/state")[1]
+                if state.get("revision"):
+                    return state
+                time.sleep(.05)
+            raise AssertionError(f"{key} did not build")
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            states = list(pool.map(built, ["one", "two"]))
+        assert [Path(state["root"]) for state in states] == [one, two]
+        assert set(svc.gallery._children) == {one, two}
+        worker = svc.gallery.worker(two)
+        worker.process.kill()
+        worker.process.wait()
+        assert built("one")["revision"] == states[0]["revision"]
+        assert built("two")["revision"] == states[1]["revision"]
+        assert svc.gallery.worker(two).process.pid != worker.process.pid

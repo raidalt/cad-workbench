@@ -17,13 +17,8 @@ Current guarantees:
 - `cad query` evaluates its expression with Python `eval` (builtins removed) in
   the worker. This is a convenience for trusted local use, not a sandbox.
 
-Before accepting scripts or query expressions from untrusted sources you need
-OS-level sandboxing around the worker, for example:
+The downloaded workspace uses the local account's permissions. Its project workers use private Unix sockets and independently recycle after idle time. Run local model files from trusted sources.
 
-- Linux: run workers in a container or under `bubblewrap`/`nsjail` with no
-  network, a read-only filesystem except the project and cache directories,
-  seccomp, and cgroup CPU/memory limits.
-- macOS: `sandbox-exec` profiles or a VM.
+The [hosted execution service](../hosted/README.md) authenticates the caller before it loads a private checkpoint. Its fixed Sandbox snapshot receives only job data. Each job uses a disposable VM with denied network egress, no exposed port and a two-minute execution limit. The same boundary applies to validation, the final build, analysis and export, including operations that implicitly load or regenerate a model. Blob credentials and the service token stay in the controller. Only a successful explicit build or Undo can publish a candidate. The controller chooses the project storage paths and conditionally updates the version pointer.
 
-The daemon's worker spawn point (`spawn_worker` in `crates/cad/src/bin/cadd.rs`)
-is the single place to add such a wrapper.
+A service token grants its holder access to all projects in that deployment. Keep it in a trusted backend. The local daemon, local HTTP worker and evaluation runner execute with the privileges of their launching account.

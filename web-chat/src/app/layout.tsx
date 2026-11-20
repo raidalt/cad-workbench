@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "cad chat",
+  title: "CAD Workspace",
   description: "Chat with the model that edits model.py",
 };
 
@@ -17,7 +17,14 @@ export const viewport = {
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en" className="dark">
-      <body>{children}</body>
+      <head>
+        <link rel="stylesheet" href="/static/style.css" />
+        <script type="importmap" dangerouslySetInnerHTML={{ __html: JSON.stringify({
+          imports: { three: "/static/vendor/three.module.min.js", "three/addons/": "/static/vendor/",
+            "three/webgpu": "/static/vendor/three.webgpu.min.js" },
+        }) }} />
+      </head>
+      <body className="cad-native-ui">{children}</body>
     </html>
   );
 }

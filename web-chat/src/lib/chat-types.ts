@@ -97,6 +97,7 @@ export type HistoryItem = {
 };
 
 export type ChatApiState = {
+  undo_file?: string | null;
   available?: boolean;
   provider?: string;
   url?: string;

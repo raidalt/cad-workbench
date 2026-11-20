@@ -65,7 +65,16 @@ def test_new_model_does_not_inherit_stale_parameter_overrides(tmp_path):
         state = wait_idle(svc)
         assert state["empty"] is True
         assert not [w for w in state.get("warnings") or [] if w.get("code") == "UNKNOWN_PARAMETER"]
-        assert (root / ".cad" / "backups").glob("params-*.toml"), "the old params.toml is kept as a backup"
+        code, body = call(svc, "/api/chat/undo", {})
+        assert code == 200, body
+        assert read_overlay(root) == {"wall": 4.5}
+        assert (root / "model.py").read_text() == MODEL
+
+        rejected, _ = call(svc, "/api/new-model", {"source": "raise ValueError('cannot build')"})
+        assert rejected >= 400
+        assert read_overlay(root) == {"wall": 4.5}
+        assert (root / "model.py").read_text() == MODEL
+
 
 
 def test_chat_context_names_the_revision_being_viewed(tmp_path):
@@ -161,3 +170,87 @@ def test_a_failure_without_an_engine_revision_omits_the_field(tmp_path, monkeypa
 
     outcome = history(root)[-1]["outcome"]
     assert outcome["active_revision"] is None
+
+
+def test_reopen_rebuilds_input_edited_while_closed(tmp_path):
+    from cad.engine import ProjectSession
+    from cad.serve import Service
+
+    root = write_project(tmp_path)
+    asset = root / "wall.data"
+    asset.write_text("one")
+    first = ProjectSession(root).build()
+    asset.write_text("two")
+    with Service(root, port=0, poll=60) as svc:
+        wait_idle(svc)
+        head = svc.session.store.head()
+        assert head > first["revision"]
+        assert svc.session.store.manifest(head)["source_hash"] == svc.session.store.source_hash()[0]
+
+
+def test_new_model_undo_preserves_intervening_override(tmp_path):
+    from cad.chat import apply_script, undo
+    from cad.errors import CadError
+    from cad.project import write_overlay
+    import pytest
+
+    root = write_project(tmp_path)
+    write_overlay(root, {"wall": 3})
+    applied = MODEL + "\n# replacement\n"
+    apply_script(root, applied, clear_overrides=True)
+    write_overlay(root, {"wall": 6})
+    with pytest.raises(CadError, match="STALE_VIEW"):
+        undo(root)
+    assert (root / "model.py").read_text() == applied
+    assert '6' in (root / "params.toml").read_text()
+
+
+
+def test_idle_worker_releases_process_and_gallery_resumes_project(tmp_path):
+    from pathlib import Path
+    from cad.gallery import Gallery
+    from cad.project_worker import ProjectWorker
+
+    root = tmp_path / "plate"
+    root.mkdir()
+    write_project(root)
+    gallery = Gallery(tmp_path, root)
+    worker = ProjectWorker(root, idle_seconds=0.2)
+    gallery._children[root] = worker
+    try:
+        worker.request("GET", "/api/state", "", None, "application/json")
+        socket_dir = Path(worker.directory.name)
+        deadline = time.monotonic() + 12
+        while socket_dir.exists() and time.monotonic() < deadline:
+            time.sleep(.05)
+        assert not socket_dir.exists() and worker.process.returncode == 0
+        resumed = gallery.worker(root)
+        assert resumed.process.pid != worker.process.pid
+        code, data, _, _ = resumed.request("GET", "/api/state", "", None, "application/json")
+        assert code == 200 and json.loads(data)["head"] == 1
+    finally:
+        gallery.stop()
+
+
+def test_asset_edit_during_build_does_not_publish_an_inconsistent_revision(tmp_path, monkeypatch):
+    import pytest
+    import cad.engine as engine
+    from cad.errors import CadError
+
+    root = write_project(tmp_path)
+    asset = root / "wall.data"
+    asset.write_text("first")
+    session = engine.ProjectSession(root)
+    head = session.build()["revision"]
+    original = engine.run_script
+
+    def edit_during_build(*args, **kwargs):
+        output = original(*args, **kwargs)
+        asset.write_text("second")
+        return output
+
+    monkeypatch.setattr(engine, "run_script", edit_during_build)
+    with pytest.raises(CadError, match="STALE_SOURCE"):
+        session.build(force=True)
+    assert session.store.revision_numbers() == [head]
+    assert session.store.head() == head

@@ -96,6 +96,24 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: installer
+      - uses: actions/checkout@v7
+        with:
+          path: source
+      - name: Verify the workspace inside every release wheel
+        run: |
+          python3 - <<'PYTHON'
+          from pathlib import Path
+          from zipfile import ZipFile
+          web = Path("source/src/cad/web")
+          wheels = list(Path("dist").glob("*.whl"))
+          assert wheels
+          for wheel in wheels:
+              with ZipFile(wheel) as archive:
+                  for asset in web.rglob("*"):
+                      if asset.is_file():
+                          key = "cad/web/" + asset.relative_to(web).as_posix()
+                          assert archive.read(key) == asset.read_bytes(), (wheel, key)
+          PYTHON
       - name: System libraries (as the README says)
         if: runner.os == 'Linux'
         run: |

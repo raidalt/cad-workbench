@@ -2,25 +2,296 @@
 2:"/static/chat/_next/static/chunks/3w3g622tlr305.js"
 3:I[49452,["$2"],"default"]
 4:I[5856,["$2"],"default"]
-8:"/static/chat/_next/static/chunks/0sokki1cqfq9f.js"
-9:"/static/chat/_next/static/chunks/13_tbt0go12qh.js"
-a:"/static/chat/_next/static/chunks/0tpqe7ppin5pj.js"
-b:I[27883,["$2","$8","$9","$a"],"ChatApp"]
-c:I[77173,["$2"],"OutletBoundary"]
-d:"$Sreact.suspense"
-10:"ViewportBoundary"
-11:I[77173,["$2"],"$10"]
-12:"MetadataBoundary"
-13:I[77173,["$2"],"$12"]
-:HL["/static/chat/_next/static/chunks/19t2g7yj-rxtu.css","style"]
+f:"ViewportBoundary"
+10:I[77173,["$2"],"$f"]
+11:"MetadataBoundary"
+12:I[77173,["$2"],"$11"]
+13:"$Sreact.suspense"
+:HL["/static/chat/_next/static/chunks/2bryqh1c7m4dx.css","style"]
+:HL["/static/style.css","style"]
 6:X
-7:[["children",{"s":"__PAGE__","h":160,"d":{"r":["$","$1","c",{"children":[["$","main",null,{"className":"h-dvh min-h-0 bg-background","children":["$","$Lb",null,{}]}],[["$","script","script-0",{"src":"/static/chat/_next/static/chunks/0sokki1cqfq9f.js","async":true}],["$","script","script-1",{"src":"/static/chat/_next/static/chunks/13_tbt0go12qh.js","async":true}],["$","script","script-2",{"src":"/static/chat/_next/static/chunks/0tpqe7ppin5pj.js","async":true}]],["$","$Lc",null,{"children":["$","$d",null,{"name":"Next.MetadataOutlet","children":"$@e"}]}]]}],"p":"$@f","v":null,"s":"$6"}}]]
-0:{"t":{"t":{"s":"","h":80,"d":{"r":["$","$1","c",{"children":[[["$","link","0",{"rel":"stylesheet","href":"/static/chat/_next/static/chunks/19t2g7yj-rxtu.css","precedence":"next"}],["$","script","script-0",{"src":"/static/chat/_next/static/chunks/3w3g622tlr305.js","async":true}]],["$","html",null,{"lang":"en","className":"dark","children":["$","body",null,{"children":["$","$L3",null,{"parallelRouterKey":"children","template":["$","$L4",null,{}],"notFound":[[["$","title",null,{"children":"404: This page could not be found."}],["$","div",null,{"style":{"fontFamily":"system-ui,\"Segoe UI\",Roboto,Helvetica,Arial,sans-serif,\"Apple Color Emoji\",\"Segoe UI Emoji\"","height":"100vh","textAlign":"center","display":"flex","flexDirection":"column","alignItems":"center","justifyContent":"center"},"children":["$","div",null,{"children":[["$","style",null,{"dangerouslySetInnerHTML":{"__html":"body{color:#000;background:#fff;margin:0}.next-error-h1{border-right:1px solid rgba(0,0,0,.3)}@media (prefers-color-scheme:dark){body{color:#fff;background:#000}.next-error-h1{border-right:1px solid rgba(255,255,255,.3)}}"}}],["$","h1",null,{"className":"next-error-h1","style":{"display":"inline-block","margin":"0 20px 0 0","padding":"0 23px 0 0","fontSize":24,"fontWeight":500,"verticalAlign":"top","lineHeight":"49px"},"children":404}],["$","div",null,{"style":{"display":"inline-block"},"children":["$","h2",null,{"style":{"fontSize":14,"fontWeight":400,"lineHeight":"49px","margin":0},"children":"This page could not be found."}]}]]}]}]],[]]}]}]}]]}],"p":"$@5","v":null,"s":"$6"},"c":"$Q7"},"h":{"r":["$","$1","h",{"children":[null,["$","$L11",null,{"children":[["$","meta","0",{"charSet":"utf-8"}],["$","meta","1",{"name":"viewport","content":"width=device-width, initial-scale=1"}],["$","meta","2",{"name":"color-scheme","content":"dark"}]]}],["$","$L13",null,{"children":[["$","div",null,{"hidden":true,"children":["$","$d",null,{"name":"Next.Metadata","children":[["$","title","0",{"children":"cad chat"}],["$","meta","1",{"name":"description","content":"Chat with the model that edits model.py"}]]}]}],null]}],null]}],"p":"$@14","v":null,"s":"$6"}},"a":"$@15","u":"$@16","b":"S-kirsYECE_5O6VUQ3dKd"}
-e:null
+8:T3340,<div id="app">
+  <header id="topbar">
+    <div class="project-heading">
+      <a id="projects-link" class="topbar-link hidden" href="/projects">Projects</a>
+      <span id="brand" aria-label="CAD"><span aria-hidden="true"></span></span>
+      <div class="project-heading-text">
+        <span id="project-name">No project</span>
+        <span id="project-entry" class="dim"></span>
+      </div>
+    </div>
+    <div class="toolbar-group panel-switches" role="group" aria-label="Workspace panels">
+      <button type="button" id="btn-left" class="on" aria-pressed="true" aria-controls="left" title="Toggle the model browser">Model tree</button>
+      <button type="button" id="btn-right" class="on" aria-pressed="true" aria-controls="right" title="Toggle the inspector">Inspector</button>
+      <button type="button" id="btn-timeline" class="on" aria-pressed="true" aria-controls="timeline" title="Toggle the timeline">Timeline</button>
+      <button type="button" id="btn-chat" class="on" aria-pressed="true" aria-controls="chat" title="Chat with the local model">Chat</button>
+    </div>
+  </header>
+
+  <main id="main">
+    <aside id="left" class="panel" aria-label="Project">
+      <nav class="dock-nav" aria-label="Project tools">
+        <button type="button" id="tree-model" aria-pressed="true" aria-controls="tree-structure">Model</button>
+        <button type="button" id="tree-build" aria-pressed="false" aria-controls="tree-history">Build history</button>
+      </nav>
+      <div id="history-banner" class="history-banner hidden" role="status">
+        <span id="history-text" class="dim"></span>
+        <button type="button" id="history-return" class="chip">return to current</button>
+      </div>
+      <div id="tree-structure">
+        <section class="block">
+          <h2 class="cad-section-heading">parts <span id="part-count" class="count"></span></h2>
+          <div id="parts-list" class="list"></div>
+        </section>
+
+        <section class="block">
+          <h2 class="cad-section-heading">features <span id="feature-count" class="count"></span></h2>
+          <div id="feature-ledger"></div>
+          <label class="feature-metrics"><input type="checkbox"> Show build metrics</label>
+        </section>
+
+        <section class="block">
+          <h2 class="cad-section-heading">parameters</h2>
+          <div id="params-list" class="list"></div>
+        </section>
+
+        <section class="block">
+          <h2 class="cad-section-heading">Part properties</h2>
+          <div id="part-info"></div>
+        </section>
+      </div>
+      <div id="tree-history" hidden>
+        <section class="block">
+          <h2 class="cad-section-heading">Revision</h2>
+          <details class="project-details"><summary>Project details</summary><div id="project-info" class="kv"></div></details>
+          <div class="row">
+            <label class="grow" for="revision-select">revision</label>
+            <span id="revision-picker"></span>
+          </div>
+          <div class="project-actions">
+          <button type="button" id="btn-rebuild" title="Rebuild the current script">Rebuild</button>
+          <button type="button" id="btn-new-model"
+                  title="Start a fresh script with an empty build(); older revisions stay in the selector">New model…</button>
+          </div>
+
+        </section>
+
+        <section class="block" id="diagnostics-block">
+          <h2 class="cad-section-heading">diagnostics</h2>
+          <div class="diag-group" id="diag-build">
+            <h3 class="diag-head">
+              <span class="diag-label">build</span><span id="diag-build-count" class="count"></span>
+            </h3>
+            <div id="build-diag-list" class="list tiny"></div>
+          </div>
+          <div class="diag-group" id="diag-print">
+            <h3 class="diag-head">
+              <span class="diag-label">print</span><span id="diag-print-count" class="count"></span>
+              <span class="spacer"></span>
+              <button type="button" id="print-checks-link" class="link-button" title="Jump to the Print section in the inspector">View checks</button>
+            </h3>
+            <div id="print-diag-list" class="diag-none" aria-live="polite"></div>
+          </div>
+          <div id="activity" class="list tiny"></div>
+          <details id="stdout-box" class="hidden">
+            <summary>stdout</summary>
+            <pre id="stdout"></pre>
+          </details>
+        </section>
+      </div>
+      <section class="block export-block">
+        <h2 class="cad-section-heading">export</h2>
+        <div class="export-row">
+          <span class="export-scope">Active part</span>
+          <button type="button" id="export-stl" title="Download the current part as STL">STL</button>
+          <button type="button" id="export-step" title="Download the current part as STEP">STEP</button>
+          <select class="export-scope" id="export-layout" aria-label="3MF layout">
+            <option value="">Project layout</option>
+            <option value="multimaterial">Keep assembled</option>
+            <option value="objects">Arrange parts</option>
+          </select>
+          <button type="button" id="export-3mf" title="Download the assembly as 3MF">3MF</button>
+          <span id="export-note" class="dim tiny">current revision</span>
+        </div>
+      </section>
+
+    </aside>
+
+    <div id="workspace" class="chat-open">
+    <div id="viewport">
+    <div class="toolbar-group camera-tools" role="group" aria-label="View controls">
+      <select id="view-preset" aria-label="View preset" title="Set a standard view (1–7)">
+        <option value="">View</option>
+        <option value="iso">Isometric</option>
+        <option value="front">Front</option>
+        <option value="back">Back</option>
+        <option value="left">Left</option>
+        <option value="right">Right</option>
+        <option value="top">Top</option>
+        <option value="bottom">Bottom</option>
+      </select>
+      <button type="button" id="btn-fit" title="Fit the model in view (F)">Fit</button>
+      <button type="button" id="btn-camera" title="Toggle perspective and orthographic projection (P)">Perspective</button>
+      <button type="button" id="btn-shot" title="Download the viewport as a PNG">Save PNG</button>
+    </div>
+      <canvas id="gl" tabindex="0" aria-label="3D viewport"></canvas>
+      <div id="viewport-hud">
+        <div id="progress" class="hidden">
+          <div class="progress-line"><span></span></div>
+          <div id="progress-text"></div>
+        </div>
+        <div id="banner" class="hidden" role="alert">
+          <div class="banner-head">
+            <span id="banner-code" class="banner-code"></span>
+            <span class="spacer"></span>
+            <button type="button" id="banner-close" title="dismiss">x</button>
+          </div>
+          <div id="banner-message"></div>
+          <div id="banner-hint" class="hint"></div>
+          <div id="banner-location" class="loc"></div>
+        </div>
+        <div id="empty" class="hidden"></div>
+        <div id="bed-preview-hud" class="hidden" role="status"></div>
+        <div id="empty-model" class="hidden" role="region" aria-label="empty model">
+          <div class="empty-card">
+            <div class="empty-title">Empty model</div>
+            <div id="empty-revision" class="empty-revision"></div>
+            <div class="empty-copy" id="empty-copy">Describe what you want to build in Design chat.</div>
+            <div id="empty-notice" class="empty-notice hidden" role="status"></div>
+            <div class="empty-actions">
+              <button type="button" id="empty-open-chat">Start designing</button>
+            </div>
+            <div id="empty-older" class="empty-older hidden"></div>
+            <div id="empty-error" class="empty-error hidden" role="alert"></div>
+          </div>
+        </div>
+        <div id="view-hint" class="dim">Drag to orbit <span>·</span> Scroll to zoom <span>·</span> <kbd>F</kbd> Fit</div>
+      </div>
+    </div>
+
+      <aside id="chat" aria-label="chat assistant">
+        <div id="dock-divider" role="separator" tabindex="0" aria-label="Inspector height"
+             aria-controls="right" aria-orientation="horizontal" aria-valuemin="25" aria-valuemax="70"
+             aria-valuenow="47" title="Resize inspector and chat · use the up and down arrows"></div>
+        <div id="chat-main">
+          <header id="chat-head">
+            <span class="chat-title">Design chat</span>
+            <span class="spacer"></span>
+            <button class="cad-button-ghost" type="button" id="chat-reload" title="Reload the chat app">Reload</button>
+            <button class="cad-button-ghost" type="button" id="chat-close" title="Close chat (Escape)" aria-label="Close chat">×</button>
+          </header>
+          <div id="chat-slot">
+            <div id="chat-root"></div>
+          </div>
+        </div>
+      </aside>
+    </div>
+
+    <aside id="right" class="panel" aria-label="Inspector">
+      <nav class="inspector-tools dock-nav" aria-label="Inspector tools">
+        <button id="tool-properties" type="button" aria-pressed="true" aria-controls="property-tools">Inspect</button>
+        <button id="tool-print" type="button" aria-pressed="false" aria-controls="print-block">Print</button>
+        <button id="btn-stress" type="button" aria-pressed="false" aria-controls="stress-panel">Stress</button>
+      </nav>
+      <div id="design-inspector">
+      <div id="property-tools">
+      <section class="block">
+        <h2 class="cad-section-heading">selection</h2>
+        <div id="selection"></div>
+      </section>
+
+      <section class="block">
+        <h2 class="cad-section-heading">Section cut</h2>
+        <div class="section-controls">
+          <div class="row">
+            <label><input type="checkbox" id="section-on"> Enable cut</label>
+            <label><input type="checkbox" id="section-flip"> Flip direction</label>
+          </div>
+          <div class="row axis-row" role="group" aria-label="Section axis">
+            <button type="button" data-axis="x">x</button>
+            <button type="button" data-axis="y">y</button>
+            <button type="button" data-axis="z" class="on">z</button>
+          </div>
+          <input type="range" aria-label="Section offset" id="section-slider" min="0" max="1" step="0.001" value="0.5" disabled>
+          <div class="row tiny"><span class="dim">offset</span><span id="section-value" class="grow-right dim">-</span></div>
+        </div>
+      </section>
+
+      </div>
+      <section class="block hidden" id="print-block">
+        <h2 class="cad-section-heading">
+          <button type="button" id="print-toggle" class="head-toggle" aria-expanded="true">
+            <span class="caret"></span><span>print</span><span id="print-state" class="count"></span>
+          </button>
+        </h2>
+        <div id="print-body">
+          <div id="print-controls"></div>
+          <div id="print-note"></div>
+          <div id="print-results"></div>
+          <div id="print-bed-preview" class="print-bed-preview"></div>
+          <div class="row print-overlay-row">
+            <label title="Colour faces below the thin-wall threshold"><input type="checkbox" id="print-thin"> thin walls</label>
+            <label title="Colour faces that overhang the bed"><input type="checkbox" id="print-overhang"> overhangs</label>
+          </div>
+          <div id="print-face-action"></div>
+        </div>
+      </section>
+
+      </div>
+      <section id="stress-panel" class="block hidden" aria-labelledby="stress-heading">
+        <h2 class="cad-section-heading" id="stress-heading" tabindex="-1">Stress analysis</h2>
+        <div id="stress"></div>
+      </section>
+    </aside>
+  </main>
+
+  <section id="timeline">
+    <div id="timeline-bar">
+      <button type="button" id="play" title="Replay the build frame by frame">Play</button>
+      <strong>Build timeline</strong>
+      <span id="frame-label">-</span>
+      <span class="spacer"></span>
+      <label class="dim" for="timeline-part-select">part</label>
+      <select id="timeline-part-select"></select>
+      <span id="timeline-note" class="dim"></span>
+    </div>
+    <div id="timeline-body">
+      <div id="ticks" role="list"></div>
+      <input type="range" id="scrub" min="0" max="0" value="0" step="1" disabled aria-label="timeline scrub">
+    </div>
+  </section>
+
+  <footer id="statusbar" aria-label="Workspace status">
+    <div class="status-readouts">
+    <span id="status-gpu">gpu: …</span><span class="dot">/</span>
+    <span id="status-project">-</span><span class="dot">/</span>
+    <span id="status-revision">no revision</span><span class="dot">/</span>
+    <span id="status-build">-</span><span class="dot">/</span>
+    <span id="status-cache">-</span><span class="dot">/</span>
+    <span id="status-tris">0 tris</span>
+    </div>
+    <button type="button" id="btn-copy" class="bar-button" title="Copy a Markdown summary for an agent (c)">copy context</button>
+    <span id="status-connection" class="pill">paused</span>
+  </footer>
+</div>
+<div id="toast" class="hidden" role="status"></div>
+7:[["children",{"s":"__PAGE__","h":160,"d":{"r":["$","$1","c",{"children":[[["$","div",null,{"dangerouslySetInnerHTML":{"__html":"$8"}}],"$L9"],["$La","$Lb","$Lc"],"$Ld"]}],"p":"$@e","v":null,"s":"$6"}}]]
+0:{"t":{"t":{"s":"","h":80,"d":{"r":["$","$1","c",{"children":[[["$","link","0",{"rel":"stylesheet","href":"/static/chat/_next/static/chunks/2bryqh1c7m4dx.css","precedence":"next"}],["$","script","script-0",{"src":"/static/chat/_next/static/chunks/3w3g622tlr305.js","async":true}]],["$","html",null,{"lang":"en","className":"dark","children":[["$","head",null,{"children":[["$","link",null,{"rel":"stylesheet","href":"/static/style.css"}],["$","script",null,{"type":"importmap","dangerouslySetInnerHTML":{"__html":"{\"imports\":{\"three\":\"/static/vendor/three.module.min.js\",\"three/addons/\":\"/static/vendor/\",\"three/webgpu\":\"/static/vendor/three.webgpu.min.js\"}}"}}]]}],["$","body",null,{"className":"cad-native-ui","children":["$","$L3",null,{"parallelRouterKey":"children","template":["$","$L4",null,{}],"notFound":[[["$","title",null,{"children":"404: This page could not be found."}],["$","div",null,{"style":{"fontFamily":"system-ui,\"Segoe UI\",Roboto,Helvetica,Arial,sans-serif,\"Apple Color Emoji\",\"Segoe UI Emoji\"","height":"100vh","textAlign":"center","display":"flex","flexDirection":"column","alignItems":"center","justifyContent":"center"},"children":["$","div",null,{"children":[["$","style",null,{"dangerouslySetInnerHTML":{"__html":"body{color:#000;background:#fff;margin:0}.next-error-h1{border-right:1px solid rgba(0,0,0,.3)}@media (prefers-color-scheme:dark){body{color:#fff;background:#000}.next-error-h1{border-right:1px solid rgba(255,255,255,.3)}}"}}],["$","h1",null,{"className":"next-error-h1","style":{"display":"inline-block","margin":"0 20px 0 0","padding":"0 23px 0 0","fontSize":24,"fontWeight":500,"verticalAlign":"top","lineHeight":"49px"},"children":404}],["$","div",null,{"style":{"display":"inline-block"},"children":["$","h2",null,{"style":{"fontSize":14,"fontWeight":400,"lineHeight":"49px","margin":0},"children":"This page could not be found."}]}]]}]}]],[]]}]}]]}]]}],"p":"$@5","v":null,"s":"$6"},"c":"$Q7"},"h":{"r":["$","$1","h",{"children":[null,["$","$L10",null,{"children":[["$","meta","0",{"charSet":"utf-8"}],["$","meta","1",{"name":"viewport","content":"width=device-width, initial-scale=1"}],["$","meta","2",{"name":"color-scheme","content":"dark"}]]}],["$","$L12",null,{"children":[["$","div",null,{"hidden":true,"children":["$","$13",null,{"name":"Next.Metadata","children":[["$","title","0",{"children":"CAD Workspace"}],["$","meta","1",{"name":"description","content":"Chat with the model that edits model.py"}]]}]}],null]}],null]}],"p":"$@14","v":null,"s":"$6"}},"a":"$@15","u":"$@16","b":"0pauahn7Fb-BxSNkVz54C"}
+17:"/static/chat/_next/static/chunks/0sokki1cqfq9f.js"
+18:"/static/chat/_next/static/chunks/2ie7yeyrp_t6t.js"
+19:"/static/chat/_next/static/chunks/0tpqe7ppin5pj.js"
+1a:I[41858,["$2","$17","$18","$19"],"WorkspacePanel"]
+1b:I[77173,["$2"],"OutletBoundary"]
+9:["$","$L1a",null,{}]
+a:["$","script","script-0",{"src":"/static/chat/_next/static/chunks/0sokki1cqfq9f.js","async":true}]
+b:["$","script","script-1",{"src":"/static/chat/_next/static/chunks/2ie7yeyrp_t6t.js","async":true}]
+c:["$","script","script-2",{"src":"/static/chat/_next/static/chunks/0tpqe7ppin5pj.js","async":true}]
+d:["$","$L1b",null,{"children":["$","$13",null,{"name":"Next.MetadataOutlet","children":"$@1c"}]}]
 6:300
+1c:null
 16:true
 6:C
 15:0
 5:"$undefined"
 14:"$undefined"
-f:"$undefined"
+e:"$undefined"
