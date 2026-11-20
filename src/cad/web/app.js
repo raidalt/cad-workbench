@@ -15,7 +15,7 @@ const PALETTE = ['#9eb0c7', '#d99e6b', '#8cbf8c', '#cc8ca6', '#bfb880', '#8ca6d9
 const REFERENCE_COLOR = '#dbd6b8';
 const EDGE_COLOR = 0x0b0e12;
 const BG_COLOR = 0x10141a;
-const WORKSPACE_PATH = window.location.pathname.match(/^\/workspace\/[^/]+/)?.[0] ?? '';
+const WORKSPACE_PATH = window.location.pathname.match(/^\/(?:projects|workspace)\/[^/]+/)?.[0] ?? '';
 const apiPath = (path) => WORKSPACE_PATH + path;
 
 const COMPACT_PANELS_QUERY = '(max-width: 960px)';
@@ -95,36 +95,12 @@ function fmtPoint(point) {
   return point.slice(0, 3).map((v) => fmt(v, 1)).join(', ');
 }
 
-function numOrNull(value) {
-  if (value == null || value === '') return null;
-  const n = Number(value);
-  return Number.isFinite(n) ? n : null;
-}
-
 function niceNumber(x) {
   if (!(x > 0) || !Number.isFinite(x)) return 1;
   const exp = Math.floor(Math.log10(x));
   const f = x / 10 ** exp;
   const nice = f < 1.5 ? 1 : f < 3 ? 2 : f < 7 ? 5 : 10;
   return nice * 10 ** exp;
-}
-
-function stepFor(min, max) {
-  const range = max - min;
-  if (!(range > 0)) return 0.1;
-  const raw = range / 100;
-  const exp = Math.floor(Math.log10(raw));
-  const f = raw / 10 ** exp;
-  const nice = f <= 1 ? 1 : f <= 2 ? 2 : f <= 5 ? 5 : 10;
-  return Math.max(nice * 10 ** exp, 1e-3);
-}
-
-function stepDecimals(step) {
-  const text = String(step);
-  const e = text.indexOf('e-');
-  if (e >= 0) return Math.min(6, Number(text.slice(e + 2)) || 0);
-  const dot = text.indexOf('.');
-  return dot >= 0 ? text.length - dot - 1 : 0;
 }
 
 function sanitizeName(name) {
@@ -314,7 +290,7 @@ const store = {
   activePart: null,
   selection: null,
   featureFaceIds: null,
-  chatSelection: null,
+  get chatSelection() { return window.cadWorkspace.selection; },
   hover: null,
   hoverPoint: null,
   hoverScheduled: false,
@@ -397,13 +373,7 @@ const store = {
   },
   chat: {
     open: true,
-    ready: false,
     pendingChatDraft: '',
-    loaded: false,
-    failed: false,
-    timer: 0,
-    token: 0,
-    probing: false,
   },
 };
 
@@ -1433,22 +1403,6 @@ function updateChrome() {
     info.appendChild(el('span', null, String(Object.keys(doc.parts || {}).length)));
   }
 
-  const revisions = (doc && doc.revisions) || [];
-  const select = byId('revision-select');
-  const signature = revisions.map((r) => `${r.n}${r.head ? 'h' : ''}`).join(',');
-  if (select.dataset.signature !== signature) {
-    select.dataset.signature = signature;
-    clearNode(select);
-    for (const revision of revisions) {
-      const option = document.createElement('option');
-      option.value = String(revision.n);
-      option.textContent = `r${revision.n}${revision.head ? ' (head)' : ''}`;
-      select.appendChild(option);
-    }
-  }
-  select.disabled = !revisions.length;
-  if (doc && doc.revision != null) select.value = String(doc.revision);
-
   const stdout = (doc && doc.stdout) || '';
   byId('stdout-box').classList.toggle('hidden', !stdout);
   setText(byId('stdout'), stdout);
@@ -1662,79 +1616,6 @@ function jumpToFeature(featureId) {
   return true;
 }
 
-function renderParams() {
-  const host = byId('params-list');
-  const doc = store.doc;
-  if (!doc) {
-    clearNode(host);
-    host.appendChild(el('div', 'note', 'connecting'));
-    return;
-  }
-  const active = document.activeElement;
-  if (active && host.contains(active) && active.type === 'range') return;
-
-  const params = doc.parameters || {};
-  const overrides = doc.overrides || {};
-  const names = Object.keys(params);
-  clearNode(host);
-  if (!names.length) {
-    host.appendChild(el('div', 'note', 'no parameters declared'));
-    return;
-  }
-
-  for (const name of names) {
-    const param = params[name] || {};
-    const min = numOrNull(param.min);
-    const max = numOrNull(param.max);
-    const numeric = typeof param.default === 'number' || typeof param.value === 'number';
-    const bounded = numeric && min != null && max != null && max > min;
-    const overridden = own(overrides, name);
-    const current = overridden ? overrides[name] : (param.value != null ? param.value : param.default);
-    const step = bounded ? stepFor(min, max) : 0.1;
-    const digits = bounded ? stepDecimals(step) : 2;
-
-    const row = el('div', 'param');
-    const head = el('div', 'param-head');
-    head.appendChild(el('span', 'param-name', name));
-    if (overridden) head.appendChild(el('span', 'chip tiny', 'override'));
-    const valueNode = el('span', 'param-value', bounded ? fmtNumber(current, digits) : formatScalar(current));
-    head.appendChild(valueNode);
-    if (param.unit) head.appendChild(el('span', 'param-unit', param.unit));
-    row.appendChild(head);
-
-    if (bounded) {
-      const slider = document.createElement('input');
-      slider.type = 'range';
-      slider.min = String(min);
-      slider.max = String(max);
-      slider.step = String(step);
-      slider.value = String(clamp(Number(current), min, max));
-      slider.disabled = isBrowsingHistory();
-      if (isBrowsingHistory()) slider.title = 'read-only while viewing history — return to current to change a parameter';
-      slider.addEventListener('input', () => {
-        setText(valueNode, fmtNumber(slider.value, digits));
-        queueParam(name, Number(slider.value));
-      });
-      slider.addEventListener('blur', () => renderParams());
-      row.appendChild(slider);
-
-      const foot = el('div', 'param-foot');
-      foot.append(el('span', 'dim', fmt(min, digits)), el('span', 'dim', fmt(max, digits)));
-      const reset = el('button', 'param-reset', 'reset');
-      reset.type = 'button';
-      reset.disabled = !overridden || isBrowsingHistory();
-      reset.title = `reset to ${formatScalar(param.default)}`;
-      reset.addEventListener('click', () => queueParam(name, param.default));
-      foot.appendChild(reset);
-      row.appendChild(foot);
-    } else {
-      row.appendChild(el('div', 'param-foot dim', 'read-only'));
-    }
-    if (param.description) row.title = param.description;
-    host.appendChild(row);
-  }
-}
-
 function queueParam(name, value) {
   if (isBrowsingHistory()) {
     showToast(`viewing r${store.viewRevision} — return to the current revision to change a parameter`);
@@ -1754,14 +1635,14 @@ async function commitParams() {
     const response = await fetch(apiPath('/api/param'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ values }),
+      body: JSON.stringify({ values, viewing: store.doc?.revision }),
     });
     const body = await response.json();
     if (!response.ok || !body.ok) {
       throw new Error((body && body.error && body.error.message) || `parameter update HTTP ${response.status}`);
     }
     if (store.doc) store.doc.overrides = body.overrides || store.doc.overrides;
-    renderParams();
+    postBoardState();
   } catch (error) {
     pushNote('error', `parameter update failed: ${error.message || error}`);
   }
@@ -1873,93 +1754,18 @@ function renderActivity() {
 // --------------------------------------------------------------------- selection panel
 
 function renderSelection() {
-  const host = byId('selection');
-  clearNode(host);
-  // A part or feature is a design target, not a fabricated BRep face.
-  const target = store.chatSelection;
-  const selection = store.selection;
-  const hover = store.hover;
-  const primary = selection || hover;
-  if (target && target.kind !== 'face') {
-    const head = el('div', 'sel-head');
-    const isFeature = target.kind === 'feature';
-    const title = el('span', 'sel-part', isFeature ? target.feature : target.part);
-    title.title = title.textContent;
-    head.append(el('span', 'tag on', isFeature ? 'Feature' : 'Part'), title);
-    host.appendChild(head);
-    renderSelectionChatAction(host);
-    renderPrintFaceAction();
-    renderBedPreview();
-    return;
-  }
-  if (!primary) {
-    host.appendChild(el('div', 'note', 'Select a face in the viewport or a feature in the model tree.'));
-    renderPrintFaceAction();
-    renderBedPreview();
-    return;
-  }
-
-  const head = el('div', 'sel-head');
-  head.appendChild(el('span', selection ? 'tag on' : 'tag', selection ? 'selected' : 'hover'));
-  head.appendChild(el('span', 'sel-part', primary.part || '-'));
-  head.appendChild(el('span', 'dim', primary.faceId != null ? `face ${primary.faceId}` : 'no face'));
-  host.appendChild(head);
-
-  if (primary.faceId == null) {
-    host.appendChild(el('div', 'note', 'this triangle has no BRep face id'));
-  } else if (primary.info) {
-    const refs = Array.isArray(primary.info.refs) ? primary.info.refs : [];
-    const refsBox = el('div', 'refs');
-    if (refs.length) {
-      for (const ref of refs) refsBox.appendChild(el('span', 'chip', ref));
-    } else {
-      refsBox.appendChild(el('span', 'dim', `face #${primary.faceId} (unnamed)`));
-    }
-    host.appendChild(refsBox);
-    host.appendChild(kvBlock([
-      ['area', primary.info.area != null ? `${fmt(primary.info.area, 2)} mm²` : '-'],
-      ['centroid', Array.isArray(primary.info.center) ? `${fmtPoint(primary.info.center)} mm` : '-'],
-    ]));
-  } else if (primary.error) {
-    host.appendChild(el('div', 'note bad', primary.error));
-  } else {
-    host.appendChild(el('div', 'note', 'loading face…'));
-  }
-
-  if (selection && hover && (hover.part !== selection.part || hover.faceId !== selection.faceId)) {
-    host.appendChild(el('div', 'sel-secondary',
-      `hover: ${hover.part || '-'} · ${hover.faceId != null ? `face ${hover.faceId}` : 'no face'}`));
-  }
-  renderSelectionChatAction(host);
+  const { chatSelection: target, selection, hover } = store;
+  const face = selection || hover;
+  const secondary = selection && hover && (hover.part !== selection.part || hover.faceId !== selection.faceId);
+  window.cadWorkspace.inspect({
+    target, face, selected: Boolean(selection), historical: isBrowsingHistory(),
+    replay: target?.kind === 'feature' && timelineFrames(target.part).some(frame => frame.id === target.feature),
+    area: face?.info?.area != null ? `${fmt(face.info.area, 2)} mm²` : '-',
+    centroid: Array.isArray(face?.info?.center) ? `${fmtPoint(face.info.center)} mm` : '-',
+    hover: secondary ? `hover: ${hover.part || '-'} · ${hover.faceId != null ? 'face ' + hover.faceId : 'no face'}` : null,
+  });
   renderPrintFaceAction();
   renderBedPreview();
-}
-
-function renderSelectionChatAction(host) {
-  const target = store.chatSelection;
-  if (!target) return;
-  const actions = el('div', 'selection-actions');
-  const ask = el('button', null, 'Ask in chat');
-  ask.type = 'button';
-  ask.addEventListener('click', () => {
-    setChatOpen(true, { focus: true });
-    postSelection(true);
-  });
-  const clear = el('button', null, 'Clear');
-  clear.type = 'button';
-  clear.title = 'Clear selection (Escape)';
-  clear.addEventListener('click', clearSelection);
-  actions.append(ask, clear);
-  if (target.kind === 'feature' && timelineFrames(target.part).some((frame) => frame.id === target.feature)) {
-    const replay = el('button', null, 'View build frame');
-    replay.type = 'button';
-    replay.addEventListener('click', () => jumpToFeature(target.feature));
-    actions.append(replay);
-  }
-  host.appendChild(actions);
-  host.appendChild(el('div', 'tiny dim', isBrowsingHistory()
-    ? `r${target.revision} · historical selection; return to current to edit`
-    : `r${target.revision} · attached to your next chat message`));
 }
 
 // --------------------------------------------------------------------- stress
@@ -3366,6 +3172,7 @@ function exportUrl(format, partName) {
   const query = new URLSearchParams();
   query.set('format', format);
   query.set('rev', store.revision == null ? 'head' : String(store.revision));
+  if (format === '3mf' && byId('export-layout').value) query.set('mode', byId('export-layout').value);
   if (format !== '3mf' && partName) query.set('part', partName);
   return apiPath(`/api/export?${query.toString()}`);
 }
@@ -4056,7 +3863,7 @@ async function createNewModel() {
   store.emptyError = '';
   renderEmptyModel();
   try {
-    const body = await postJson(apiPath('/api/new-model'), {});
+    const body = await postJson(apiPath('/api/new-model'), { viewing: store.doc?.revision });
     const revision = body && body.revision != null ? body.revision : null;
     const suffix = revision != null ? `r${revision}` : 'a new revision';
     const backupName = body && body.backup
@@ -4171,7 +3978,6 @@ function applyState(doc) {
   syncTimeline(doc);
   updateChrome();
   renderParts();
-  renderParams();
   renderPartInfo();
   renderFeatureLedger();
   renderDiagnostics();
@@ -4240,8 +4046,7 @@ function pushNote(level, message) {
 // --------------------------------------------------------------------- events
 
 function connectEvents() {
-  if (store.source) store.source.close();
-  const source = new EventSource(apiPath('/api/events'));
+  const source = window.cadWorkspace.events;
   store.source = source;
 
   source.onopen = () => {
@@ -4249,6 +4054,7 @@ function connectEvents() {
     updateStatus();
     refreshState();
   };
+  if (source.readyState === EventSource.OPEN) source.onopen();
   source.onerror = () => {
     store.conn = 'reconnecting';
     updateStatus();
@@ -4358,8 +4164,6 @@ function handleBuildError(payload) {
 
 // --------------------------------------------------------------------- chat slot
 
-const CHAT_FRAME_URL = new URL('/static/chat/', window.location.origin);
-if (WORKSPACE_PATH) CHAT_FRAME_URL.searchParams.set('workspace', WORKSPACE_PATH);
 const CHAT_OPEN_KEY = 'cad.chat.open';
 
 function setChatOpen(open, options = {}) {
@@ -4376,14 +4180,9 @@ function setChatOpen(open, options = {}) {
         setPanelOpen('left', false);
         setPanelOpen('right', false);
       }
-      const frame = byId('chat-frame');
-      if (frame) {
-        try { frame.focus(); } catch { /* not focusable yet */ }
-      }
+      byId('chat-root').querySelector('textarea')?.focus();
     }
   } else {
-    const frame = byId('chat-frame');
-    if (frame) frame.blur();
     if (options.focus) byId('btn-chat').focus();
   }
   if (options.persist !== false) {
@@ -4393,168 +4192,22 @@ function setChatOpen(open, options = {}) {
   }
 }
 
-function hideChatFallback() {
-  const node = byId('chat-fallback');
-  if (node) node.classList.add('hidden');
-}
-
-function showChatLoading() {
-  hideChatFallback();
-  const node = byId('chat-loading');
-  if (node) node.classList.remove('hidden');
-}
-
-function failChatFrame(message) {
-  if (store.chat.timer) {
-    clearTimeout(store.chat.timer);
-    store.chat.timer = 0;
-  }
-  store.chat.failed = true;
-  store.chat.loaded = false;
-  store.chat.probing = false;
-  const loading = byId('chat-loading');
-  if (loading) loading.classList.add('hidden');
-  const node = byId('chat-fallback');
-  if (!node) return;
-  node.classList.remove('hidden');
-  setText(byId('chat-fallback-title'), 'chat app not available');
-  setText(byId('chat-fallback-message'),
-    message || `expected ${CHAT_FRAME_URL} — is the React app built?`);
-}
-
-function attachChatEscape() {
-  const frame = byId('chat-frame');
-  if (!frame) return;
-  try {
-    const documentInside = frame.contentDocument;
-    if (!documentInside || documentInside.__cadChatEscape) return;
-    documentInside.__cadChatEscape = true;
-    documentInside.addEventListener('keydown', (event) => {
-      if (event.key === 'Escape') {
-        event.preventDefault();
-        if (store.chatSelection || store.selection || store.bedPreview.active) {
-          clearSelection();
-          return;
-        }
-        setChatOpen(false);
-        byId('btn-chat').focus();
-      }
-    }, true);
-  } catch { /* cross-origin: Escape still works from the page shell */ }
-}
-
-async function verifyChatFrame(token) {
-  store.chat.probing = true;
-  try {
-    const response = await fetch(CHAT_FRAME_URL, { cache: 'no-store' });
-    if (token !== store.chat.token) return;
-    if (!response.ok) {
-      failChatFrame(`chat app not found (HTTP ${response.status}) — expected ${CHAT_FRAME_URL}`);
-      return;
-    }
-    store.chat.probing = false;
-    store.chat.loaded = true;
-    store.chat.failed = false;
-    hideChatFallback();
-    const loading = byId('chat-loading');
-    if (loading) loading.classList.add('hidden');
-  } catch (error) {
-    if (token !== store.chat.token) return;
-    failChatFrame(`cannot reach the chat app: ${error.message || error}`);
-  }
-}
-
-function reloadChatFrame() {
-  const frame = byId('chat-frame');
-  if (!frame) return;
-  store.chat.token += 1;
-  const token = store.chat.token;
-  store.chat.ready = false;
-  store.chat.loaded = false;
-  store.chat.failed = false;
-  store.chat.probing = false;
-  showChatLoading();
-  if (store.chat.timer) clearTimeout(store.chat.timer);
-  store.chat.timer = setTimeout(() => {
-    if (token === store.chat.token && !store.chat.loaded) {
-      failChatFrame('the chat app did not load in time — is /static/chat/ built?');
-    }
-  }, 3000);
-  try {
-    const source = new URL(CHAT_FRAME_URL);
-    source.searchParams.set('reload', String(Date.now()));
-    frame.src = source.href;
-  } catch (error) {
-    failChatFrame(`cannot load the chat app: ${error.message || error}`);
-  }
-}
-
-function onChatFrameLoad() {
-  if (store.chat.timer) {
-    clearTimeout(store.chat.timer);
-    store.chat.timer = 0;
-  }
-  attachChatEscape();
-  postBoardState();
-  postSelection();
-  verifyChatFrame(store.chat.token);
-}
-
-/**
- * Tell the chat which revision is actually on screen. apiPath(`/api/state`) only knows
- * head, so without this the chat would claim the head revision is displayed
- * while the selector shows an older one.
- */
 function postBoardState() {
-  const frame = byId('chat-frame');
   const doc = store.doc;
-  if (!frame || !frame.contentWindow || !doc) return;
-  try {
-    frame.contentWindow.postMessage({
-      type: 'cad:board',
-      revision: doc.revision != null ? Number(doc.revision) : null,
-      head: doc.head != null ? Number(doc.head) : null,
-      empty: revisionIsEmpty(doc),
-    }, window.location.origin);
-  } catch { /* the frame may be gone */ }
+  if (doc) window.cadWorkspace.showBoard({ revision: doc.revision, head: doc.head, empty: revisionIsEmpty(doc),
+    revisions: doc.revisions || [], parameters: doc.parameters || {}, overrides: doc.overrides || {} });
 }
 
 function setChatSelection(selection) {
   store.featureFaceIds = null;
-  store.chatSelection = selection;
-  postSelection();
+  window.cadWorkspace.select(selection);
 }
 
 function postSelection(focus = false) {
-  const frame = byId('chat-frame');
-  if (!frame || !frame.contentWindow) return;
-  try {
-    frame.contentWindow.postMessage({
-      type: 'cad:selection',
-      selection: store.chatSelection,
-      ...(focus ? { focus: true } : {}),
-    }, window.location.origin);
-  } catch { /* the frame may be gone */ }
+  if (focus) window.cadWorkspace.dispatchEvent(new Event('focus-chat'));
 }
 
-function onChatMessage(event) {
-  const frame = byId('chat-frame');
-  if (!frame || event.source !== frame.contentWindow) return;
-  if (event.origin !== window.location.origin) return;
-  const data = event.data;
-  if (!data || typeof data !== 'object') return;
-  if (data.type === 'cad:request-selection') {
-    store.chat.ready = true;
-    postBoardState();
-    postSelection();
-    postChatDraft();
-    return;
-  }
-  if (data.type === 'cad:clear-selection') {
-    clearSelection();
-    return;
-  }
-  if (data.type !== 'cad:hide-parts') return;
+function hidePartsFromChat() {
   clearSelection();
   const names = Object.keys((store.doc && store.doc.parts) || {});
   let changed = 0;
@@ -4571,16 +4224,11 @@ function onChatMessage(event) {
   pushNote('info', changed
     ? `chat hid ${changed} part${changed === 1 ? '' : 's'}`
     : 'chat hid all parts (already hidden)');
-  try {
-    frame.contentWindow.postMessage({ type: 'cad:parts-hidden', count: changed }, window.location.origin);
-  } catch { /* the frame may be gone */ }
 }
 
 function postChatDraft() {
-  if (!store.chat.ready || !store.chat.pendingChatDraft) return;
-  const frame = byId('chat-frame').contentWindow;
-  if (!frame) return;
-  frame.postMessage({ type: 'cad:stress-draft', text: store.chat.pendingChatDraft }, window.location.origin);
+  if (!store.chat.pendingChatDraft) return;
+  window.cadWorkspace.dispatchEvent(new CustomEvent('stress-draft', { detail: store.chat.pendingChatDraft }));
   store.chat.pendingChatDraft = '';
 }
 
@@ -4593,16 +4241,18 @@ function initChatShell() {
 
   byId('btn-chat').addEventListener('click', () => setChatOpen(!store.chat.open, { focus: true }));
   byId('chat-close').addEventListener('click', () => setChatOpen(false, { focus: true }));
-  byId('chat-reload').addEventListener('click', reloadChatFrame);
-  byId('chat-retry').addEventListener('click', reloadChatFrame);
-
-  const frame = byId('chat-frame');
-  if (frame) {
-    frame.addEventListener('load', onChatFrameLoad);
-    frame.addEventListener('error', () => failChatFrame('the chat app failed to load'));
-  }
-  window.addEventListener('message', onChatMessage);
-  reloadChatFrame();
+  byId('chat-reload').addEventListener('click', () => window.cadWorkspace.dispatchEvent(new Event('reload-chat')));
+  window.cadWorkspace.addEventListener('clear-selection', clearSelection);
+  window.cadWorkspace.addEventListener('ask-selection', () => { setChatOpen(true, { focus: true }); postSelection(true); });
+  window.cadWorkspace.addEventListener('replay-selection', () => jumpToFeature(store.chatSelection?.feature));
+  window.cadWorkspace.addEventListener('hide-parts', hidePartsFromChat);
+  window.cadWorkspace.addEventListener('refresh-board', scheduleStateRefresh);
+  byId('chat-root').addEventListener('keydown', event => {
+    if (event.key !== 'Escape') return;
+    event.stopPropagation();
+    if (store.chatSelection || store.selection || store.bedPreview.active) clearSelection();
+    else setChatOpen(false, { focus: true });
+  });
 }
 
 // --------------------------------------------------------------------- screenshot / actions
@@ -4699,7 +4349,7 @@ async function rebuild() {
     const response = await fetch(apiPath('/api/build'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ force: true }),
+      body: JSON.stringify({ force: true, viewing: store.doc?.revision }),
     });
     const body = await response.json();
     if (!response.ok || !body.ok) {
@@ -4760,11 +4410,6 @@ function renderHistoryBanner() {
     if (rebuild) rebuild.title = 'rebuild the current script';
     if (fresh) fresh.title = 'Start a fresh script with an empty build(); older revisions stay in the selector';
   }
-}
-
-async function checkoutRevision() {
-  const value = Number(byId('revision-select').value);
-  await checkoutRevisionNumber(value);
 }
 
 // --------------------------------------------------------------------- ui bindings
@@ -4974,7 +4619,8 @@ function bindUi() {
   byId('btn-rebuild').addEventListener('click', rebuild);
   byId('btn-copy').addEventListener('click', copyContext);
   byId('banner-close').addEventListener('click', dismissBanner);
-  byId('revision-select').addEventListener('change', checkoutRevision);
+  window.cadWorkspace.addEventListener('view-revision', event => checkoutRevisionNumber(event.detail));
+  window.cadWorkspace.addEventListener('change-parameter', event => queueParam(event.detail.name, event.detail.value));
   byId('btn-new-model').addEventListener('click', onNewModelClick);
   byId('history-return').addEventListener('click', returnToCurrentRevision);
   byId('empty-open-chat').addEventListener('click', () => {
@@ -5076,7 +4722,6 @@ function bindUi() {
 function focusInChat(target) {
   const chat = byId('chat');
   if (!chat || !target) return false;
-  if (target.id === 'chat-frame') return true;
   return chat.contains(target);
 }
 

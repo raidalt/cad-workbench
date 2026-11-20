@@ -16,7 +16,6 @@ import type {
   GeometrySelection,
   NewModelResponse,
   ServerEvent,
-  StateApi,
 } from "@/lib/chat-types";
 import { replyProposesClear, wantsClearBoard } from "@/lib/clear-intent";
 import { parseMetrics, uid } from "@/lib/format";
@@ -35,7 +34,8 @@ import {
   type AppliedEvent,
   type PendingError,
 } from "@/lib/outcome";
-import { normalizeSelection, selectionLabel } from "@/lib/selection";
+import { workspace, type Board } from "@/lib/workspace";
+import { selectionLabel } from "@/lib/selection";
 import { streamStore } from "@/lib/stream-store";
 
 type ThreadState = { messages: ChatMsg[]; running: boolean };
@@ -153,12 +153,6 @@ type Applied = { file: string };
 
 type Draft = { text: string; token: number; append?: boolean };
 
-type Board = {
-  empty: boolean;
-  head: number | null;
-  revision: number | null;
-};
-
 const INITIAL_META: Meta = {
   available: null,
   model: "",
@@ -167,10 +161,13 @@ const INITIAL_META: Meta = {
   configPath: null,
 };
 
-function numOrNull(value: unknown): number | null {
-  return typeof value === "number" && Number.isFinite(value)
-    ? Math.trunc(value)
-    : null;
+function subscribe(listener: () => void) {
+  workspace.addEventListener("board", listener);
+  workspace.addEventListener("selection", listener);
+  return () => {
+    workspace.removeEventListener("board", listener);
+    workspace.removeEventListener("selection", listener);
+  };
 }
 
 export function ChatApp() {
@@ -190,12 +187,11 @@ export function ChatApp() {
   );
   const [newModelBusy, setNewModelBusy] = React.useState(false);
   const [draft, setDraft] = React.useState<Draft | null>(null);
-  const [selection, setSelection] = React.useState<GeometrySelection | null>(null);
+  const selection = React.useSyncExternalStore(subscribe, () => workspace.selection, () => null);
   const [focusToken, setFocusToken] = React.useState(0);
   const [validation, setValidation] = React.useState<{ phase: string; message: string } | null>(null);
-  const selectionRef = React.useRef<GeometrySelection | null>(null);
   const retryingRef = React.useRef(false);
-  const [board, setBoard] = React.useState<Board | null>(null);
+  const board = React.useSyncExternalStore(subscribe, () => workspace.board, () => null);
 
   const runningRef = React.useRef(false);
   const pendingMetricsRef = React.useRef<ChatMetrics | null>(null);
@@ -213,10 +209,6 @@ export function ChatApp() {
     turn?: string;
   } | null>(null);
 
-  const boardInFlightRef = React.useRef(false);
-  const boardPendingRef = React.useRef(false);
-  // The viewer owns which revision is on screen; /api/state only knows head.
-  const parentBoardRef = React.useRef<{ revision: number | null; empty: boolean } | null>(null);
   const boardRef = React.useRef<Board | null>(null);
 
   React.useEffect(() => {
@@ -253,8 +245,7 @@ export function ChatApp() {
     setConfirmReset(false);
     setNotice(null);
     setValidation(null);
-    selectionRef.current = null;
-    setSelection(null);
+    workspace.dispatchEvent(new Event("clear-selection"));
     restoreDraft("");
     dispatch({ type: "hydrate", server: [], local: [], running: false });
   }, [restoreDraft]);
@@ -266,110 +257,34 @@ export function ChatApp() {
     });
   }, []);
 
-  const refreshBoard = React.useCallback(async () => {
-    if (boardInFlightRef.current) {
-      boardPendingRef.current = true; // coalesce: one loop re-runs after the fetch
-      return;
-    }
-    boardInFlightRef.current = true;
-    try {
-      do {
-        boardPendingRef.current = false;
-        try {
-          const response = await fetch(workspacePath() + "/api/state", { cache: "no-store" });
-          if (!response.ok) continue;
-          const data = (await response.json()) as StateApi;
-          const partCount =
-            data.parts && typeof data.parts === "object"
-              ? Object.keys(data.parts).length
-              : null;
-          const empty =
-            typeof data.empty === "boolean"
-              ? data.empty
-              : partCount === 0 && data.revision != null;
-          const nextBoard = {
-            empty,
-            head: numOrNull(data.head),
-            revision: numOrNull(data.revision),
-          };
-          const fromParent = parentBoardRef.current;
-          const chosen = fromParent
-            ? { empty: fromParent.empty, revision: fromParent.revision, head: nextBoard.head }
-            : nextBoard;
-          setBoard((current) =>
-            current &&
-            current.empty === chosen.empty &&
-            current.head === chosen.head &&
-            current.revision === chosen.revision
-              ? current
-              : chosen,
-          );
-        } catch {
-          // Keep the last known board state; the connection pill covers the rest.
-        }
-      } while (boardPendingRef.current);
-    } finally {
-      boardInFlightRef.current = false;
-    }
+  const refreshBoard = React.useCallback(() => {
+    workspace.dispatchEvent(new Event("refresh-board"));
   }, []);
 
-  // The viewer tells us which revision is actually on screen (and whether it is
-  // empty), because /api/state only knows head. This is what keeps the empty
-  // notice and the `viewing` guard honest while browsing history.
   React.useEffect(() => {
-    const onBoard = (event: MessageEvent) => {
-      if (event.origin !== window.location.origin || event.source !== window.parent) return;
-      const data = event.data as
-        | { type?: string; revision?: unknown; head?: unknown; empty?: unknown }
-        | null;
-      if (!data || data.type !== "cad:board") return;
-      const revision = numOrNull(data.revision);
-      const empty = data.empty === true;
-      parentBoardRef.current = { revision, empty };
-      if (selectionRef.current && selectionRef.current.revision !== revision) {
-        selectionRef.current = null;
-        setSelection(null);
-        editCtxRef.current = null;
-      }
-      setBoard({ revision, empty, head: numOrNull(data.head) });
+    const focus = () => setFocusToken(token => token + 1);
+    const fill = (event: Event) => {
+      editCtxRef.current = null;
+      restoreDraft((event as CustomEvent<string>).detail, true);
     };
-    window.addEventListener("message", onBoard);
-    return () => window.removeEventListener("message", onBoard);
-  }, []);
-
-  React.useEffect(() => {
-    const onSelection = (event: MessageEvent) => {
-      if (event.origin !== window.location.origin || event.source !== window.parent) return;
-      const data = event.data;
-      if (data?.type === "cad:stress-draft" && typeof data.text === "string") {
-        editCtxRef.current = null;
-        restoreDraft(data.text, true);
-        return;
-      }
-      if (!data || data.type !== "cad:selection") return;
-      const next = normalizeSelection(data.selection);
-      const current = selectionRef.current;
-      if (editCtxRef.current && (next?.revision !== current?.revision || next?.part !== current?.part || next?.kind !== current?.kind || next?.face !== current?.face || next?.feature !== current?.feature)) {
+    const changed = () => {
+      if (editCtxRef.current) {
         editCtxRef.current = null;
         setNotice("Selection changed. The edited prompt will start a new turn.");
       }
-      selectionRef.current = next;
-      setSelection(next);
-      if (data.focus === true) setFocusToken((token) => token + 1);
     };
-    window.addEventListener("message", onSelection);
-    window.parent.postMessage({ type: "cad:request-selection" }, window.location.origin);
-    return () => window.removeEventListener("message", onSelection);
+    workspace.addEventListener("focus-chat", focus);
+    workspace.addEventListener("stress-draft", fill);
+    workspace.addEventListener("selection", changed);
+    return () => {
+      workspace.removeEventListener("focus-chat", focus);
+      workspace.removeEventListener("stress-draft", fill);
+      workspace.removeEventListener("selection", changed);
+    };
   }, [restoreDraft]);
 
   const clearSelection = React.useCallback(() => {
-    if (editCtxRef.current) {
-      editCtxRef.current = null;
-      setNotice("Selection removed. The edited prompt will start a new turn.");
-    }
-    selectionRef.current = null;
-    setSelection(null);
-    window.parent.postMessage({ type: "cad:clear-selection" }, window.location.origin);
+    workspace.dispatchEvent(new Event("clear-selection"));
   }, []);
 
   const beginTurn = React.useCallback(() => {
@@ -527,6 +442,7 @@ export function ChatApp() {
     let disposed = false;
     let opened = false;
     let initialLoaded = false;
+    const subscriptions = new AbortController();
     let source: EventSource | null = null;
     let offlineTimer = 0;
 
@@ -540,6 +456,7 @@ export function ChatApp() {
         const data = (await response.json()) as ChatApiState;
         if (disposed || request !== loadNumber || previousChat !== chatIdRef.current) return;
 
+        setApplied(data.undo_file ? { file: data.undo_file } : null);
         setMeta({
           available: data.available !== false,
           model: typeof data.model === "string" ? data.model : "",
@@ -589,7 +506,7 @@ export function ChatApp() {
     };
 
     try {
-      source = new EventSource(workspacePath() + "/api/events");
+      source = workspace.events;
     } catch {
       // Not during the effect itself: report it on the next task, and only if
       // this effect is still mounted.
@@ -599,22 +516,22 @@ export function ChatApp() {
     }
 
     if (source) {
-      source.onopen = () => {
+      source.addEventListener("open", () => {
         if (disposed) return;
         setConnection("live");
         if (opened || !initialLoaded) {
           void load();
         }
         opened = true;
-      };
-      source.onerror = () => {
+      }, { signal: subscriptions.signal });
+      source.addEventListener("error", () => {
         if (disposed) return;
         setConnection(
           source && source.readyState === EventSource.CLOSED
             ? "offline"
             : "reconnecting",
         );
-      };
+      }, { signal: subscriptions.signal });
 
       const listen = (
         name: string,
@@ -628,7 +545,7 @@ export function ChatApp() {
           } catch {
             // A malformed event must not take the panel down.
           }
-        });
+        }, { signal: subscriptions.signal });
       };
 
       listen("chat_start", (data) => {
@@ -732,7 +649,6 @@ export function ChatApp() {
       });
 
       listen("build_ok", () => {
-        setApplied(null);
         void refreshBoard();
       });
 
@@ -747,12 +663,12 @@ export function ChatApp() {
     return () => {
       disposed = true;
       if (offlineTimer) window.clearTimeout(offlineTimer);
-      source?.close();
+      subscriptions.abort();
     };
   }, [finishStream, refreshBoard, switchChat]);
 
   const send = React.useCallback(
-    async (raw: string, attached: GeometrySelection | null = selectionRef.current) => {
+    async (raw: string, attached: GeometrySelection | null = workspace.selection) => {
       const message = raw.trim();
       if (!message || runningRef.current || resettingRef.current || meta.available !== true) return;
 
@@ -826,8 +742,7 @@ export function ChatApp() {
 
       // Preserve the original thread while editing. The server chooses append
       // or replacement and commits it only when this retry finishes.
-      selectionRef.current = target.selection ?? null;
-      setSelection(target.selection ?? null);
+      workspace.select(target.selection ?? null);
       editCtxRef.current = { msgId: target.userMsgId, turn: target.turn };
       setClearChoice(null);
       restoreDraft(target.prompt);
@@ -885,7 +800,7 @@ export function ChatApp() {
   const chooseHideParts = React.useCallback(() => {
     const choice = clearChoice;
     try {
-      window.parent.postMessage({ type: "cad:hide-parts" }, window.location.origin);
+      workspace.dispatchEvent(new Event("hide-parts"));
       clearSelection();
     } catch {
       // A blocked parent must not take the thread down.
@@ -959,7 +874,10 @@ export function ChatApp() {
     setUndoing(true);
     setNotice(null);
     try {
-      const response = await fetch(workspacePath() + "/api/chat/undo", { method: "POST" });
+      const response = await fetch(workspacePath() + "/api/chat/undo", { method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ viewing: boardRef.current?.revision }),
+      });
       if (response.ok) {
         setApplied(null);
       } else {
@@ -1054,7 +972,7 @@ export function ChatApp() {
           <button
             type="button"
             onClick={() => void undo()}
-            disabled={undoing}
+            disabled={undoing || board?.head !== board?.revision}
             className="ml-auto shrink-0 border border-[var(--line)] bg-[var(--panel)] px-1.5 py-px text-[9px] text-[var(--text)] hover:border-[var(--line-hover)] hover:text-[var(--text-strong)] disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
           >
             undo

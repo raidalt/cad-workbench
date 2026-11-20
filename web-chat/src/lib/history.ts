@@ -93,8 +93,7 @@ const STORAGE_PREFIX = "cad.chat:";
 
 export function workspacePath(): string {
   if (typeof window === "undefined") return "";
-  const path = new URLSearchParams(window.location.search).get("workspace") ?? "";
-  return /^\/workspace\/[^/]+$/.test(path) ? path : "";
+  return window.location.pathname.match(/^\/(?:projects|workspace)\/[^/]+/)?.[0] ?? "";
 }
 
 export function storageKey(): string {

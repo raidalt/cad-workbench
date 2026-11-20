@@ -383,7 +383,6 @@ def test_frames_restore_the_previous_timeline():
 # --------------------------------------------------------------------------- static
 
 
-@pytest.mark.skipif(not (WEB / "index.html").exists(), reason="the web frontend is not written yet")
 def test_static_route_serves_the_frontend(tmp_path):
     with Service(write_project(tmp_path), port=0) as svc:
         wait_idle(svc)

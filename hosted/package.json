@@ -1,0 +1,12 @@
+{
+  "name": "cad-workbench-hosted",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test"
+  },
+  "dependencies": {
+    "@vercel/blob": "^2.9.0",
+    "@vercel/sandbox": "^4.0.0"
+  }
+}

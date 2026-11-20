@@ -1,11 +1,6 @@
-# cad chat
+# CAD workspace
 
-The chat panel for the `cad` live viewport, embedded by the viewer as
-`<iframe src="/static/chat/">`.
-
-It is a Next.js App Router project with **static export**: `cad serve` serves
-plain files from `src/cad/web/chat/`, the wheel ships them, and no Node is
-needed at runtime.
+The local server serves one Next.js static export. The workspace mounts React chat alongside the Three.js canvas. Both read the current board and selection from `src/lib/workspace.ts` and subscribe to the same event connection.
 
 ## Rebuild
 
@@ -166,8 +161,7 @@ reply streams.
 
 **Clear-board ambiguity.** A message matching the clear/wipe/empty intent (or a
 reply that proposes clearing) never reaches the model. An inline, keyboard
-accessible card offers: **hide parts** (`window.parent.postMessage({type:
-"cad:hide-parts"}, "*")`, then a local note; no API call and no model change),
+accessible card offers: **hide parts** (a workspace action, then a local note; no API call and no model change),
 **start a new model** (`POST /api/new-model`, then a note naming the new
 revision and saying older revisions stay in the history selector), and
 **cancel** (dismiss and restore the prompt to the composer). The card is

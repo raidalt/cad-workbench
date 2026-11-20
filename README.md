@@ -20,7 +20,7 @@ Use **Projects** to create and reopen designs. Projects persist across downloads
 
 On a minimal Linux installation, install the [system libraries](#1-linux-only-system-libraries) first. For the standalone `cad` CLI and optional stress analysis, use the [source build instructions](#building-from-source).
 
-Browse [editable sample projects](samples), inspect the [spinner cross-sections](samples/improved-fidget-spinners/preview.png), or [download four assembled STLs](samples/improved-fidget-spinners/spinners.zip). Spinner clearances and axial retention were tested digitally.
+Browse [editable sample projects](samples), inspect the [spinner cross-sections](samples/improved-fidget-spinners/preview.png), or [download four assembled STLs](samples/improved-fidget-spinners/spinners.zip). Spinner clearances and axial retention were tested digitally. The spinner projects export assembled 3MF files so the bearings stay in position. For existing projects, choose **Keep assembled** in the 3MF layout menu.
 
 This distribution is based on [cli-cad](https://github.com/andrewimm/cli-cad) under the [Apache 2.0 license](LICENSE). It adds a redesigned model workspace, feature-aware chat, and print-in-place bearing tools.
 
@@ -71,6 +71,7 @@ cad build && cad inspect && cad render --views iso   # renders/r1/*.png
   for Claude Code, Codex and other agents that read the skills.sh format. It teaches them the workflow.
   Agents can also run `cad docs` at any time for the full reference.
 - **Stress analysis later:** re-run the install command with `scripts/install.sh --fea`.
+- Set `CAD_DISABLE_SLICER=1` to skip external slicer discovery, including integration and evaluation runs.
 - **Slicing** (`cad slice`: print time, filament grams, a ready-to-print `.gcode.3mf`) needs
   [Bambu Studio](https://bambulab.com/en/download/studio). `cad` looks for it:
   - in `/Applications` on macOS;

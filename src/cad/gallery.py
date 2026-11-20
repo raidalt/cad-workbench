@@ -1,25 +1,20 @@
-"""Local project library. Each open project keeps its own viewer process."""
+"""Local project library. One origin with isolated workers for open projects."""
 
 from __future__ import annotations
 
-import io
-import json
 import os
 import re
-import select
-import subprocess
-import sys
 import tempfile
 import threading
 from pathlib import Path
-from urllib.parse import urlencode
+from urllib.parse import quote, urlencode
 
 from .chat import NEW_MODEL_TEMPLATE
 from .errors import CadError
+from .project_worker import ProjectWorker
 from .project import ProjectConfig, Store, _atomic_write, init_project
 
 PREVIEW_VERSION = 2
-GALLERY_PORT_ENV = "CAD_GALLERY_PORT"
 
 
 def display_name(root: Path, fallback: str) -> str:
@@ -44,10 +39,9 @@ class Gallery:
         self.current = current
         if not self.library.is_dir() or current.parent != self.library:
             raise CadError("INVALID_ARGUMENT", "The served project must be directly inside the project library.")
-        self.port = 0
         self._lock = threading.Lock()
         self._preview_lock = threading.Lock()
-        self._children: dict[str, tuple[subprocess.Popen, str]] = {}
+        self._children: dict[Path, ProjectWorker] = {}
 
     def project_path(self, key) -> Path:
         if not isinstance(key, str) or not key or key.startswith(".") or Path(key).name != key:
@@ -97,28 +91,18 @@ class Gallery:
         _atomic_write(self.project_path(key) / ".cad/gallery-title", _name(value))
 
     def preview(self, key, raw_revision: str) -> bytes:
-        from . import renderer
-        from .engine import ProjectSession
-
         path = self.project_path(key)
         if not raw_revision or not raw_revision.isascii() or not raw_revision.isdigit() or len(raw_revision) > 10:
             raise CadError("NOT_FOUND", "No preview for this project.")
         rev = int(raw_revision)
-        session = ProjectSession(path)
-        cache = session.store.cache_dir / "gallery" / f"r{rev}-v{PREVIEW_VERSION}.png"
+        cache = Store(path).cache_dir / "gallery" / f"r{rev}-v{PREVIEW_VERSION}.png"
         with self._preview_lock:
             if cache.is_file():
                 return cache.read_bytes()
-            _, parts = session.parts(rev)
-            if not parts:
+            code, data, _, _ = self.request(
+                path, "GET", "/api/preview", urlencode({"rev": rev}), None, "application/json")
+            if code != 200:
                 raise CadError("NOT_FOUND", "No preview for this project.")
-            scene = renderer.build_scene(parts, deflection=.2)
-            camera = renderer.parse_views("iso")[0]
-            image, _ = renderer.render_one(scene, camera, size=(480, 320), annotate_images=False,
-                                           supersample=1, background=(0.0, 0.0, 0.0), margin=.17)
-            result = io.BytesIO()
-            image.save(result, format="PNG")
-            data = result.getvalue()
             cache.parent.mkdir(parents=True, exist_ok=True)
             with tempfile.NamedTemporaryFile(dir=cache.parent, delete=False) as temp:
                 temp_path = Path(temp.name)
@@ -132,49 +116,31 @@ class Gallery:
 
     def open(self, key) -> str:
         path = self.project_path(key)
-        if path == self.current:
-            return "/"
-        with self._lock:
-            previous = self._children.get(key)
-            if previous and previous[0].poll() is None:
-                return previous[1]
-            if previous:
-                self._stop_process(previous[0])
-            env = {**os.environ, GALLERY_PORT_ENV: str(self.port)}
-            proc = subprocess.Popen(
-                [sys.executable, "-m", "cad", "serve", "--json", "--no-open", "--port", "0",
-                 "--project", str(path)],
-                env=env, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, start_new_session=True,
-            )
-            try:
-                assert proc.stdout is not None
-                if not select.select([proc.stdout], [], [], 15)[0]:
-                    raise TimeoutError("viewer did not start")
-                report = json.loads(proc.stdout.readline())
-                info = report["result"]
-                if not report["ok"] or Path(info["root"]) != path:
-                    raise ValueError("viewer did not start the requested project")
-                url = f"http://127.0.0.1:{int(info['port'])}/"
-                self._children[key] = (proc, url)
-                return url
-            except (KeyError, ValueError, OSError, TypeError) as error:
-                self._stop_process(proc)
-                raise CadError("INTERNAL", "Could not open this project. Try opening it again.") from error
+        return f"/projects/{quote(path.name, safe='')}/"
 
-    @staticmethod
-    def _stop_process(proc: subprocess.Popen) -> None:
-        if proc.poll() is None:
-            proc.terminate()
-            try:
-                proc.wait(timeout=3)
-            except subprocess.TimeoutExpired:
-                proc.kill()
-                proc.wait()
-        if proc.stdout is not None:
-            proc.stdout.close()
+    def worker(self, path: Path) -> ProjectWorker:
+        with self._lock:
+            for key, worker in list(self._children.items()):
+                if worker.process.poll() is not None:
+                    worker.stop()
+                    del self._children[key]
+            if path not in self._children:
+                self._children[path] = ProjectWorker(path)
+            return self._children[path]
+
+    def request(self, root, method, path, query, body, content_type):
+        worker = self.worker(root)
+        try:
+            return worker.request(method, path, query, body, content_type)
+        except CadError as error:
+            # An idle worker can exit between lookup and connect. Only retry if
+            # the socket was never connected and the process has actually exited.
+            if error.code != "WORKER_UNAVAILABLE" or worker.process.poll() is None:
+                raise
+            return self.worker(root).request(method, path, query, body, content_type)
 
     def stop(self) -> None:
         with self._lock:
-            for process, _ in self._children.values():
-                self._stop_process(process)
+            for worker in self._children.values():
+                worker.stop()
             self._children.clear()

@@ -14,6 +14,7 @@ from pathlib import Path
 
 import pytest
 
+from cad.chat import NEW_MODEL_TEMPLATE
 from cad.cli import main
 from cad.engine import Engine
 from cad.errors import CadError
@@ -171,7 +172,7 @@ def test_new_model_replaces_the_script_and_keeps_every_revision(tmp_path):
         assert state["revision"] == 2
         assert state["empty"] is True and state["parts"] == {}
         assert [r["n"] for r in state["revisions"]] == [1, 2], "history is preserved"
-        assert (root / "model.py").read_text() == EMPTY
+        assert (root / "model.py").read_text() == NEW_MODEL_TEMPLATE
 
         # the old revision is still readable, by number and by checkout
         code, state = call(svc, "/api/state?rev=1")

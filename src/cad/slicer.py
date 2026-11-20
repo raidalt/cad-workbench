@@ -57,6 +57,9 @@ def find_bambu(configured: str | None = None) -> Path | None:
     platform's usual install locations (a convenience fallback, not a requirement)."""
     import sys
 
+    if os.environ.get("CAD_DISABLE_SLICER") == "1":
+        return None
+
     candidates = [Path(c).expanduser() for c in (configured, os.environ.get("CAD_BAMBU_STUDIO")) if c]
     for exe in ("bambu-studio", "BambuStudio", "bambu_studio", "bambu-studio.exe", "bambu-studio.AppImage"):
         w = shutil.which(exe)
