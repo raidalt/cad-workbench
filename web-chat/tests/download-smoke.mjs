@@ -34,6 +34,8 @@ try {
   await expect(page.locator("#project-name")).toHaveText("Three-lobe spinner");
   await expect(page.locator("#chat-root textarea")).toBeVisible();
   await expect(page.locator("#status-tris")).not.toHaveText("0 tris");
+  await expect(page.locator("#status-connection")).toHaveText("live");
+  await expect(page.locator("#play")).not.toHaveClass(/\bon\b/);
   await expect(async () => {
     await page.locator("#gl").click();
     await expect(page.locator("#selection .tag.on")).toHaveText("selected", { timeout: 1000 });

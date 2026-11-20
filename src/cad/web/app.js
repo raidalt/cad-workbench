@@ -4242,6 +4242,7 @@ function connectEvents() {
     updateStatus();
     refreshState();
   };
+  if (source.readyState === EventSource.OPEN) source.onopen();
   source.onerror = () => {
     store.conn = 'reconnecting';
     updateStatus();

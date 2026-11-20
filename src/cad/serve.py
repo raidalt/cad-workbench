@@ -31,14 +31,14 @@ import traceback
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, unquote, urlparse
 
 import numpy as np
 
 from . import __version__, live
 from .engine import ProjectSession
 from .errors import CadError
-from .gallery import GALLERY_PORT_ENV, Gallery, display_name
+from .gallery import Gallery, display_name
 
 WEB_DIR = Path(__file__).resolve().parent / "web"
 STATIC_TYPES = {".js": "text/javascript", ".mjs": "text/javascript", ".css": "text/css", ".html": "text/html",
@@ -926,6 +926,135 @@ class ThreadedHTTPServer(ThreadingHTTPServer):
         super().handle_error(request, client_address)
 
 
+class ProjectAPI:
+    """Project operations shared by the local viewer and isolated project workers."""
+
+    def __init__(self, service, library=False):
+        self.builder = service.builder
+        self.chat = service.chat
+        self.library = library
+
+    @staticmethod
+    def _send(code, body, ctype="application/json", extra=None):
+        return code, body, ctype, extra or {}
+
+    def _json(self, data, code=200):
+        return self._send(code, json.dumps(data, default=_json_default).encode())
+
+    def request(self, method, path, query, body=None, content_type="application/json"):
+        q = {k: v[-1] for k, v in parse_qs(query).items()}
+        if method == "GET":
+            if path == "/api/state":
+                # read-only history browsing: ?revision=N renders that snapshot
+                # without moving HEAD (POST /api/revision still exists for other consumers)
+                state = self.builder.state(q.get("revision") or q.get("rev"))
+                if self.library:
+                    state["projects_url"] = "/projects"
+                    state["project_title"] = display_name(self.builder.session.root, state["project"])
+                return self._json(state)
+            if path == "/api/preview":
+                import io
+                from . import renderer
+                revision = q.get("rev", "")
+                if not revision.isascii() or not revision.isdigit():
+                    raise CadError("NOT_FOUND", "No preview for this revision.")
+                with self.builder.model_lock:
+                    _, parts = self.builder.session.parts(int(revision))
+                    if not parts:
+                        raise CadError("NOT_FOUND", "This revision has no parts.")
+                    scene = renderer.build_scene(parts, deflection=.2)
+                camera = renderer.parse_views("iso")[0]
+                image, _ = renderer.render_one(scene, camera, size=(480, 320), annotate_images=False,
+                                               supersample=1, background=(0.0, 0.0, 0.0), margin=.17)
+                buffer = io.BytesIO()
+                image.save(buffer, format="PNG")
+                return self._send(200, buffer.getvalue(), "image/png")
+            if path == "/api/mesh":
+                return self._send(200, self.builder.mesh_bytes(q.get("part"), q.get("rev")),
+                                  "application/octet-stream")
+            if path == "/api/frame":
+                raw = q.get("index") or "-1"
+                index = int(raw) if raw.lstrip("-").isdigit() else -1
+                fr = self.builder.frames.get(q.get("part", ""), index)
+                if fr is None:
+                    return self._json({"ok": False, "error": {"code": "NOT_FOUND", "message": "no such frame"}}, 404)
+                return self._send(200, encode_mesh(fr["mesh"]), "application/octet-stream")
+            if path == "/api/faces":
+                return self._json({"faces": self.builder.faces(q.get("part", ""), q.get("rev"))})
+            if path == "/api/chat":
+                return self._json(self.chat.state())
+            if path == "/api/print":
+                return self._json(self.builder.print_report(
+                    q.get("part"), q.get("rev"), material=q.get("material"), bed=q.get("bed"),
+                    angle=_num(q.get("angle"), 45.0), nozzle=_num(q.get("nozzle"), 0.4),
+                    min_wall=_num(q.get("min_wall"), None),
+                    per_face=int(_num(q.get("per_face"), 3))))
+            if path == "/api/export":
+                data, fname, ctype = self.builder.export_bytes(q.get("format", "stl"), q.get("part"), q.get("rev"))
+                return self._send(200, data, ctype, {"Content-Disposition": f'attachment; filename="{fname}"'})
+            if path == "/api/fea":
+                return self._send(200, self.builder.fea(q.get("study", ""), q.get("field", "stress"),
+                                                        q.get("quality", "normal"), q.get("rev")),
+                                  "application/octet-stream")
+            return self._json({"ok": False, "error": {"code": "NOT_FOUND", "message": f"no route {path}"}}, 404)
+        if method == "POST":
+            if path == "/api/chat":
+                return self._json(self.chat.start(body.get("message", ""), retry_turn=body.get("retry_turn"),
+                                                  viewing=body.get("viewing"), selection=body.get("selection"),
+                                                  chat_id=body.get("chat_id")))
+            if path == "/api/chat/reset":
+                if content_type != "application/json" or not isinstance(body, dict):
+                    raise CadError("INVALID_ARGUMENT", "Send the chat reset request as JSON.")
+                return self._json(self.chat.reset(body.get("chat_id")))
+            if path == "/api/chat/stop":
+                return self._json(self.chat.stop())
+            if path == "/api/chat/undo":
+                with self.builder.model_lock:
+                    info = self.chat.undo()
+                    self.builder.request(force=True)
+                return self._json({"ok": True, **info})
+            if path == "/api/new-model":
+                return self._json(self.builder.new_model(body.get("source")))
+            if path == "/api/orient":
+                return self._json(self.builder.orient(body.get("part"), body.get("ref"), viewing=body.get("viewing")))
+            if path == "/api/build":
+                self.builder.request(body.get("params"), force=bool(body.get("force")))
+                return self._json({"ok": True, "queued": True})
+            if path == "/api/param":
+                values = body.get("values") or {}
+                with self.builder.model_lock:
+                    self.builder.session.set_params(values, force=bool(body.get("force")))
+                    if self.builder.watcher is not None:
+                        self.builder.watcher.accept()  # our own write must not look like an edit
+                    self.builder.request(force=True)
+                    return self._json({"ok": True, "overrides": self.builder.session.params()["overlay"]})
+            if path == "/api/revision":
+                rev = body.get("revision")
+                with self.builder.model_lock:
+                    target = self.builder.session.resolve_rev(rev)
+                    self.builder.session.store.set_head(target)
+                self.builder.publish_state(reason="checkout", revision=target)
+                return self._json({"ok": True, "revision": target})
+            return self._json({"ok": False, "error": {"code": "NOT_FOUND", "message": f"no route {path}"}}, 404)
+        raise CadError("INVALID_ARGUMENT", "unsupported project operation")
+
+
+def event_stream(hub):
+    subscription = hub.subscribe()
+    try:
+        yield b"retry: 500\n\n"
+        while True:
+            try:
+                ev = subscription.get(timeout=5)
+            except queue.Empty:
+                yield b": ping\n\n"
+                continue
+            payload = json.dumps({k: v for k, v in ev.items() if k != "mesh"}, default=_json_default)
+            yield f"event: {ev.get('t', 'message')}\ndata: {payload}\n\n".encode()
+    finally:
+        hub.unsubscribe(subscription)
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = "cad"
     protocol_version = "HTTP/1.1"
@@ -935,7 +1064,7 @@ class Handler(BaseHTTPRequestHandler):
     hub: Hub
     chat: ChatManager
     gallery: Gallery | None = None
-    gallery_port: int | None = None
+    project_api: ProjectAPI
 
     def log_message(self, fmt, *args):  # quiet: the CLI owns the console
         pass
@@ -968,13 +1097,13 @@ class Handler(BaseHTTPRequestHandler):
         u = urlparse(self.path)
         q = {k: v[-1] for k, v in parse_qs(u.query).items()}
         try:
+            if u.path == "/" and self.gallery is not None:
+                return self._send(302, b"", extra={"Location": self.gallery.open(self.gallery.current.name)})
             if u.path in ("/", "/index.html", "/static/index.html"):
                 return self._static("chat/index.html")
             if u.path in ("/projects", "/projects/"):
                 if self.gallery is not None:
                     return self._static("projects.html")
-                if self.gallery_port is not None:
-                    return self._send(303, b"", extra={"Location": f"http://127.0.0.1:{self.gallery_port}/projects"})
                 raise CadError("NOT_FOUND", "No project library is configured.")
             if u.path == "/api/projects" and self.gallery is not None:
                 return self._json({"projects": self.gallery.projects()})
@@ -985,44 +1114,7 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(204, b"", "image/x-icon")
             if u.path.startswith("/static/"):
                 return self._static(u.path[len("/static/"):])
-            if u.path == "/api/state":
-                # read-only history browsing: ?revision=N renders that snapshot
-                # without moving HEAD (POST /api/revision still exists for other consumers)
-                state = self.builder.state(q.get("revision") or q.get("rev"))
-                if self.gallery is not None or self.gallery_port is not None:
-                    state["projects_url"] = "/projects"
-                    state["project_title"] = display_name(self.builder.session.root, state["project"])
-                return self._json(state)
-            if u.path == "/api/events":
-                return self._events()
-            if u.path == "/api/mesh":
-                return self._send(200, self.builder.mesh_bytes(q.get("part"), q.get("rev")),
-                                  "application/octet-stream")
-            if u.path == "/api/frame":
-                raw = q.get("index") or "-1"
-                index = int(raw) if raw.lstrip("-").isdigit() else -1
-                fr = self.builder.frames.get(q.get("part", ""), index)
-                if fr is None:
-                    return self._json({"ok": False, "error": {"code": "NOT_FOUND", "message": "no such frame"}}, 404)
-                return self._send(200, encode_mesh(fr["mesh"]), "application/octet-stream")
-            if u.path == "/api/faces":
-                return self._json({"faces": self.builder.faces(q.get("part", ""), q.get("rev"))})
-            if u.path == "/api/chat":
-                return self._json(self.chat.state())
-            if u.path == "/api/print":
-                return self._json(self.builder.print_report(
-                    q.get("part"), q.get("rev"), material=q.get("material"), bed=q.get("bed"),
-                    angle=_num(q.get("angle"), 45.0), nozzle=_num(q.get("nozzle"), 0.4),
-                    min_wall=_num(q.get("min_wall"), None),
-                    per_face=int(_num(q.get("per_face"), 3))))
-            if u.path == "/api/export":
-                data, fname, ctype = self.builder.export_bytes(q.get("format", "stl"), q.get("part"), q.get("rev"))
-                return self._send(200, data, ctype, {"Content-Disposition": f'attachment; filename="{fname}"'})
-            if u.path == "/api/fea":
-                return self._send(200, self.builder.fea(q.get("study", ""), q.get("field", "stress"),
-                                                        q.get("quality", "normal"), q.get("rev")),
-                                  "application/octet-stream")
-            return self._json({"ok": False, "error": {"code": "NOT_FOUND", "message": f"no route {u.path}"}}, 404)
+            return self._project("GET", u, None)
         except Exception as e:  # noqa: BLE001
             self._error(e)
 
@@ -1041,45 +1133,33 @@ class Handler(BaseHTTPRequestHandler):
                 if u.path == "/api/projects/rename":
                     self.gallery.rename(body.get("key"), body.get("name"))
                     return self._json({"ok": True})
-            if u.path == "/api/chat":
-                return self._json(self.chat.start(body.get("message", ""), retry_turn=body.get("retry_turn"),
-                                                  viewing=body.get("viewing"), selection=body.get("selection"),
-                                                  chat_id=body.get("chat_id")))
-            if u.path == "/api/chat/reset":
-                if self.headers.get_content_type() != "application/json" or not isinstance(body, dict):
-                    raise CadError("INVALID_ARGUMENT", "Send the chat reset request as JSON.")
-                return self._json(self.chat.reset(body.get("chat_id")))
-            if u.path == "/api/chat/stop":
-                return self._json(self.chat.stop())
-            if u.path == "/api/chat/undo":
-                info = self.chat.undo()
-                self.builder.request(force=True)
-                return self._json({"ok": True, **info})
-            if u.path == "/api/new-model":
-                return self._json(self.builder.new_model(body.get("source")))
-            if u.path == "/api/orient":
-                return self._json(self.builder.orient(body.get("part"), body.get("ref"), viewing=body.get("viewing")))
-            if u.path == "/api/build":
-                self.builder.request(body.get("params"), force=bool(body.get("force")))
-                return self._json({"ok": True, "queued": True})
-            if u.path == "/api/param":
-                values = body.get("values") or {}
-                with self.builder.model_lock:
-                    self.builder.session.set_params(values, force=bool(body.get("force")))
-                    if self.builder.watcher is not None:
-                        self.builder.watcher.accept()  # our own write must not look like an edit
-                    self.builder.request(force=True)
-                    return self._json({"ok": True, "overrides": self.builder.session.params()["overlay"]})
-            if u.path == "/api/revision":
-                rev = body.get("revision")
-                with self.builder.model_lock:
-                    target = self.builder.session.resolve_rev(rev)
-                    self.builder.session.store.set_head(target)
-                self.builder.publish_state(reason="checkout", revision=target)
-                return self._json({"ok": True, "revision": target})
-            return self._json({"ok": False, "error": {"code": "NOT_FOUND", "message": f"no route {u.path}"}}, 404)
+            return self._project("POST", u, body)
         except Exception as e:  # noqa: BLE001
             self._error(e)
+
+    def _project(self, method, u, body):
+        path = u.path
+        worker = None
+        if path.startswith("/projects/") and self.gallery is not None:
+            key, _, route = path[len("/projects/"):].partition("/")
+            root = self.gallery.project_path(unquote(key))
+            if not route and method == "GET":
+                return self._static("chat/index.html")
+            if route == "projects" and method == "GET":
+                return self._send(303, b"", extra={"Location": "/projects"})
+            path = "/" + route
+            if not path.startswith("/api/"):
+                raise CadError("NOT_FOUND", "Unknown workspace route")
+            worker = self.gallery.worker(root)
+        elif self.gallery is not None:
+            worker = self.gallery.worker(self.gallery.current)
+
+        if method == "GET" and path == "/api/events":
+            stream = worker.events() if worker else event_stream(self.hub)
+            return self._events(stream)
+
+        api = worker or self.project_api
+        return self._send(*api.request(method, path, u.query, body, self.headers.get_content_type()))
 
     # -- static
     def _static(self, name: str) -> None:
@@ -1092,37 +1172,21 @@ class Handler(BaseHTTPRequestHandler):
         self._send(200, target.read_bytes(), ctype, {"Cache-Control": "no-cache"})
 
     # -- SSE
-    def _events(self) -> None:
-        q = self.hub.subscribe()
-        self.close_connection = True  # the stream ends when this handler returns
-        try:
-            self.connection.settimeout(30)  # a stalled reader must not pin the thread
-        except OSError:
-            pass
+    def _events(self, stream) -> None:
+        self.close_connection = True
+        self.connection.settimeout(30)
         self.send_response(200)
         self.send_header("Content-Type", "text/event-stream")
         self.send_header("Cache-Control", "no-cache")
-        self.send_header("Connection", "keep-alive")
         self.end_headers()
         try:
-            self.wfile.write(b"retry: 500\n\n")
-            self.wfile.flush()
-            while True:
-                try:
-                    ev = q.get(timeout=10)
-                except queue.Empty:
-                    self.wfile.write(b": ping\n\n")
-                    self.wfile.flush()
-                    continue
-                if ev.get("t") == "frame":
-                    ev = {k: v for k, v in ev.items() if k != "mesh"}
-                payload = json.dumps(ev, default=_json_default)
-                self.wfile.write(f"event: {ev.get('t', 'message')}\ndata: {payload}\n\n".encode())
+            for chunk in stream:
+                self.wfile.write(chunk)
                 self.wfile.flush()
         except (BrokenPipeError, ConnectionResetError, OSError):
             pass
         finally:
-            self.hub.unsubscribe(q)
+            stream.close()
 
 
 def _json_default(v):
@@ -1164,8 +1228,6 @@ class Service:
         if library is not None and host != "127.0.0.1":
             raise CadError("INVALID_ARGUMENT", "The project library requires --host 127.0.0.1.")
         self.gallery = Gallery(Path(library), self.root) if library is not None else None
-        parent_port = os.environ.get(GALLERY_PORT_ENV, "")
-        self.gallery_port = int(parent_port) if parent_port.isascii() and parent_port.isdigit() and len(parent_port) <= 5 else None
         self.session = ProjectSession(self.root)
         self.hub = Hub()
         self.frames = Frames()
@@ -1180,7 +1242,7 @@ class Service:
 
     def start(self) -> "Service":
         handler = type("CadHandler", (Handler,), {"builder": self.builder, "hub": self.hub, "chat": self.chat,
-                                                "gallery": self.gallery, "gallery_port": self.gallery_port})
+                                                "gallery": self.gallery, "project_api": ProjectAPI(self, self.gallery is not None)})
         httpd = None
         for p in range(self.port, self.port + 20):
             try:
@@ -1192,9 +1254,14 @@ class Service:
             raise CadError("INTERNAL", f"no free port in {self.port}..{self.port + 19}", hint="pass --port")
         self._httpd = httpd
         self.port = httpd.server_address[1]
-        if self.gallery is not None:
-            self.gallery.port = self.port
         threading.Thread(target=httpd.serve_forever, name="cad-http", daemon=True).start()
+        if self.gallery is None:
+            self.start_engine()
+        else:
+            self.gallery.worker(self.root)
+        return self
+
+    def start_engine(self):
         self._old_sink = live.set_sink(self._sink)
         self.builder.start()
         self.watcher.start()
@@ -1222,10 +1289,11 @@ class Service:
         self.hub.publish(ev)
 
     def stop(self) -> None:
-        self.chat.stop()
-        self.watcher.stop()
-        self.builder.stop()
-        live.set_sink(self._old_sink)
+        if self.gallery is None:
+            self.chat.stop()
+            self.watcher.stop()
+            self.builder.stop()
+            live.set_sink(self._old_sink)
         if self._httpd is not None:
             self._httpd.shutdown()
             self._httpd.server_close()
