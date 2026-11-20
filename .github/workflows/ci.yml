@@ -31,17 +31,9 @@ jobs:
       - run: npx playwright install --with-deps chromium
         working-directory: web-chat
       - run: node web-chat/tests/download-smoke.mjs
-
-  hosted:
-    name: Isolated CAD job controller
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-      - run: npm ci && npm test
+      - name: Exercise hosted jobs with the installed native CAD runtime
         working-directory: hosted
+        run: npm ci && CAD_TEST_PYTHON="$GITHUB_WORKSPACE/.local-cad/venv/bin/python" npm test
 
   rust:
     name: Rust (fmt, clippy, build)

@@ -7,7 +7,7 @@ This directory is the Vercel project root for the single-owner CAD job API. A tr
 1. Import this repository into Vercel, set the root directory to `hosted`, and connect a private Blob store. Configure `CAD_SERVICE_TOKEN` with a randomly generated secret. Keep it on the calling server.
 2. In this directory, run `npm ci`, link the project with `vercel link`, and run `vercel env pull .env.local`. Project authentication is required for Sandbox operations.
 3. From a trusted checkout run `node --env-file=.env.local prepare-runtime.mjs`. This provisions a Sandbox, installs the locked Python runtime, and prints the snapshot identifier. Set `CAD_SANDBOX_SNAPSHOT` to that identifier in Vercel and deploy. Refresh it when the engine, lockfile, or snapshot lifetime changes.
-4. Run `npm test` for the controller and publication tests. The native integration test is in `tests/test_isolated_job.py` at the repository root.
+4. Run `npm test` for the controller and publication tests. Set `CAD_TEST_PYTHON` to an absolute CAD interpreter path to include the native controller integration test. The native integration test is in `tests/test_isolated_job.py` at the repository root.
 
 ## Call the API
 

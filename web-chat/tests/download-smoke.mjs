@@ -101,8 +101,8 @@ try {
   await page.locator("#tree-build").click();
   await page.locator("#btn-rebuild").click();
   await expect(page.locator("#revision-select")).toHaveValue("4");
-  const worker = execFileSync("ps", ["-axo", "pid=,command="], { encoding: "utf8" }).split("\n")
-    .find(line => line.includes(" -m cad.project_worker " + duo + " ") && line.trimEnd().endsWith(" " + child.pid));
+  const worker = execFileSync("ps", ["-axo", "pid=,ppid=,command="], { encoding: "utf8" }).split("\n")
+    .find(line => line.includes(" -m cad.project_worker " + duo + " ") && Number(line.trim().split(/\s+/, 2)[1]) === child.pid);
   assert.ok(worker, "expected an active worker for this test project");
   const streamCount = streams.length;
   process.kill(Number(worker.trim().split(/\s+/)[0]), "SIGKILL");

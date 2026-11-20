@@ -6,7 +6,12 @@ import { blobProjects, Conflict, runProjectJob } from "../lib/projects.mjs";
 
 const digest = value => createHash("sha256").update(value).digest();
 
-export default async function handler(req, res) {
+export default function handler(req, res) {
+  return handleJob(req, res, blobProjects,
+    (request, checkpoint) => executeJob(request, checkpoint, { snapshot: process.env.CAD_SANDBOX_SNAPSHOT }));
+}
+
+export async function handleJob(req, res, store, execute) {
   res.setHeader("Cache-Control", "private, no-store");
   res.setHeader("X-Content-Type-Options", "nosniff");
   const secret = process.env.CAD_SERVICE_TOKEN;
@@ -17,8 +22,7 @@ export default async function handler(req, res) {
   try {
     const input = req.body;
     if (!input || typeof input !== "object" || typeof input.project !== "string") return res.status(400).end();
-    const job = await runProjectJob(input.project, input, blobProjects,
-      (request, checkpoint) => executeJob(request, checkpoint, { snapshot: process.env.CAD_SANDBOX_SNAPSHOT }));
+    const job = await runProjectJob(input.project, input, store, execute);
     if (job.version) res.setHeader("X-CAD-Version", job.version);
     if (job.data.length > 4 * 1024 * 1024) {
       const pathname = `cad/${input.project}/downloads/${randomUUID()}`;
