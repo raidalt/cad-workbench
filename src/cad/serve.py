@@ -402,7 +402,7 @@ class Builder:
             return face_table(parts[part], self.session.mesh(r, part, parts[part]))
 
     # ------------------------------------------------------------------ export
-    def export_bytes(self, fmt: str, part: str | None = None, revision=None) -> tuple[bytes, str, str]:
+    def export_bytes(self, fmt: str, part: str | None = None, revision=None, *, mode=None) -> tuple[bytes, str, str]:
         """(bytes, filename, content type) for a one-click download."""
         import tempfile
 
@@ -426,13 +426,13 @@ class Builder:
                                details={"parts": list(deliver)})
             name = self.session.config.name
             stem = f"{name}-r{r}-" + ("-".join(deliver) if len(deliver) > 1 else next(iter(deliver)))
-            cfg = self.session.config
+            cfg = self.session.revision_config(r)
             with tempfile.TemporaryDirectory() as td:
                 if fmt == "3mf":
                     from .threemf import export_3mf
 
                     path = Path(td) / f"{stem}.3mf"
-                    export_3mf(deliver, path, mode=getattr(cfg, "threemf_mode", None) or "objects",
+                    export_3mf(deliver, path, mode=mode or cfg.threemf_mode,
                                target=getattr(cfg, "threemf_for", None) or "any", title=stem)
                     ctype = "model/3mf"
                 else:
@@ -981,7 +981,7 @@ class ProjectAPI:
                     min_wall=_num(q.get("min_wall"), None),
                     per_face=int(_num(q.get("per_face"), 3))))
             if path == "/api/export":
-                data, fname, ctype = self.builder.export_bytes(q.get("format", "stl"), q.get("part"), q.get("rev"))
+                data, fname, ctype = self.builder.export_bytes(q.get("format", "stl"), q.get("part"), q.get("rev"), mode=q.get("mode"))
                 return self._send(200, data, ctype, {"Content-Disposition": f'attachment; filename="{fname}"'})
             if path == "/api/fea":
                 return self._send(200, self.builder.fea(q.get("study", ""), q.get("field", "stress"),

@@ -1,3 +1,7 @@
 [project]
 name = "Pocket coin"
 entry = "model.py"
+
+[export]
+# Preserve the captive bearings in their design positions.
+threemf_mode = "multimaterial"

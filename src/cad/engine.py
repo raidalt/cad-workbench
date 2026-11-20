@@ -61,6 +61,12 @@ class ProjectSession:
     def config(self) -> ProjectConfig:
         return ProjectConfig.load(self.root)
 
+    def revision_config(self, revision: int) -> ProjectConfig:
+        source = self.store.revision_dir(revision) / "source"
+        if (source / "cad.toml").is_file():
+            return ProjectConfig.load(source, default_name=self.root.name)
+        return self.config
+
     # ------------------------------------------------------------------ build
     def build_key(self, params: dict) -> tuple[str, str, dict]:
         src_hash, files = self.store.source_hash()
@@ -547,7 +553,8 @@ class ProjectSession:
         if not all_parts:
             raise CadError(NOT_FOUND, f"revision {r} has no parts",
                            hint="add geometry to the script, or choose a revision that has parts")
-        formats = formats or self.config.export_formats
+        cfg = self.revision_config(r)
+        formats = formats or cfg.export_formats
         valid = sorted(set(FORMATS.values()))
         for f in formats:
             if f not in valid:
@@ -566,11 +573,11 @@ class ProjectSession:
             for n in chosen:
                 if n not in all_parts:
                     raise CadError(NOT_FOUND, f"no part named '{n}'", details={"parts": list(all_parts)})
-            threemf_mode = threemf_mode or self.config.threemf_mode
-            threemf_for = threemf_for or self.config.threemf_for
-            dst = out / f"{self.config.name}.3mf"
+            threemf_mode = threemf_mode or cfg.threemf_mode
+            threemf_for = threemf_for or cfg.threemf_for
+            dst = out / f"{cfg.name}.3mf"
             threemf = export_3mf({n: all_parts[n] for n in chosen}, dst, mode=threemf_mode, tolerance=tolerance,
-                                 title=self.config.name, target=threemf_for)
+                                 title=cfg.name, target=threemf_for)
             files.append({"part": ",".join(chosen), "format": "3mf", "path": str(dst), "bytes": threemf["bytes"],
                           "materials": threemf["materials"], "mode": threemf_mode, "for": threemf_for,
                           "arranged": threemf["arranged"]})

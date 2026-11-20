@@ -93,7 +93,11 @@
           <span class="export-scope">Active part</span>
           <button type="button" id="export-stl" title="Download the current part as STL">STL</button>
           <button type="button" id="export-step" title="Download the current part as STEP">STEP</button>
-          <span class="export-scope">Assembly</span>
+          <select class="export-scope" id="export-layout" aria-label="3MF layout">
+            <option value="">Project layout</option>
+            <option value="multimaterial">Keep assembled</option>
+            <option value="objects">Arrange parts</option>
+          </select>
           <button type="button" id="export-3mf" title="Download the assembly as 3MF">3MF</button>
           <span id="export-note" class="dim tiny">current revision</span>
         </div>

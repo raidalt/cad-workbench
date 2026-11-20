@@ -26,7 +26,7 @@ export async function handleJob(req, res, store, execute) {
     if (job.version) res.setHeader("X-CAD-Version", job.version);
     if (job.data.length > 4 * 1024 * 1024) {
       const pathname = `cad/${input.project}/downloads/${randomUUID()}`;
-      await put(pathname, job.data, { access: "private", contentType: job.type });
+      await put(pathname, job.data, { access: "private", contentType: job.type, ttlDays: 1 });
       const token = await issueSignedToken({ pathname, operations: ["get"], validUntil: Date.now() + 300000 });
       const { presignedUrl } = await presignUrl(token, { pathname, operation: "get", access: "private" });
       return res.redirect(303, presignedUrl);

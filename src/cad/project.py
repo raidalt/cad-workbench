@@ -60,7 +60,7 @@ class ProjectConfig:
     threemf_for: str = "any"
 
     @staticmethod
-    def load(root: Path) -> "ProjectConfig":
+    def load(root: Path, *, default_name: str | None = None) -> "ProjectConfig":
         p = root / CONFIG_NAME
         raw: dict = {}
         if p.exists():
@@ -73,7 +73,7 @@ class ProjectConfig:
         export = raw.get("export", {})
         size = render.get("size", [1024, 768])
         return ProjectConfig(
-            name=proj.get("name", root.name),
+            name=proj.get("name", default_name or root.name),
             entry=proj.get("entry", "model.py"),
             views=list(render.get("views", ["iso", "front", "right", "top"])),
             size=(int(size[0]), int(size[1])),

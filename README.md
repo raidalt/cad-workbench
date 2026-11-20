@@ -20,7 +20,7 @@ Use **Projects** to create and reopen designs. Projects persist across downloads
 
 On a minimal Linux installation, install the [system libraries](#1-linux-only-system-libraries) first. For the standalone `cad` CLI and optional stress analysis, use the [source build instructions](#building-from-source).
 
-Browse [editable sample projects](samples), inspect the [spinner cross-sections](samples/improved-fidget-spinners/preview.png), or [download four assembled STLs](samples/improved-fidget-spinners/spinners.zip). Spinner clearances and axial retention were tested digitally.
+Browse [editable sample projects](samples), inspect the [spinner cross-sections](samples/improved-fidget-spinners/preview.png), or [download four assembled STLs](samples/improved-fidget-spinners/spinners.zip). Spinner clearances and axial retention were tested digitally. The spinner projects export assembled 3MF files so the bearings stay in position. For existing projects, choose **Keep assembled** in the 3MF layout menu.
 
 This distribution is based on [cli-cad](https://github.com/andrewimm/cli-cad) under the [Apache 2.0 license](LICENSE). It adds a redesigned model workspace, feature-aware chat, and print-in-place bearing tools.
 

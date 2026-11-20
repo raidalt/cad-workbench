@@ -19,6 +19,8 @@ Send a JSON POST to `/api/cad` with an `Authorization: Bearer <service token>` h
 
 The response includes the published version in `X-CAD-Version`. For later builds or Undo, send that exact value as `base`. A stale write returns HTTP 409. A validation error returns 422. Build accepts optional parameter overrides and a map of relative input filenames to base64-encoded bytes.
 
-Read actions are `state`, `mesh`, `faces`, `preview`, `clearance`, `print`, `fea`, and `export`. Use `validate` to check a candidate without publishing it. Export multi-body designs with `{"format":"3mf"}` or name a part for STL and STEP. Large results return a redirect to a short-lived signed download URL. Treat that URL as private.
+Read actions are `state`, `mesh`, `faces`, `preview`, `clearance`, `print`, `fea`, and `export`. Use `validate` to check a candidate without publishing it. Export a print-in-place assembly with `{"format":"3mf","mode":"multimaterial"}` to keep the bodies in their design positions. Omitting mode uses the revision’s project settings. Name a part for STL and STEP. Large results return a redirect to a short-lived signed download URL. Treat that URL as private.
+
+Each job has a two-minute VM deadline and a 128 MiB limit per worker result or compressed checkpoint. Repeated mesh, preview, and export reads reuse an artifact keyed by the published project version and request arguments.
 
 The downloaded local application continues to open with `pnpm run dev`. The hosted endpoint serves backend jobs. Browser user accounts, per-user permissions and hosted chat require a trusted application frontend.

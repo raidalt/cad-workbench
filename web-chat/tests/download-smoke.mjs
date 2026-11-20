@@ -106,7 +106,22 @@ try {
   await expect(page.locator("#status-connection")).toHaveText("live");
   const download = page.waitForEvent("download");
   await page.locator("#export-3mf").click();
-  assert.ok((await readFile(await (await download).path())).subarray(0, 2).equals(Buffer.from("PK")));
+  const exportedPath = await (await download).path();
+  execFileSync(join(root, ".local-cad/venv/bin/python"), ["-c", [
+    "import sys, zipfile, xml.etree.ElementTree as xml",
+    "with zipfile.ZipFile(sys.argv[1]) as archive: model = xml.fromstring(archive.read('3D/3dmodel.model'))",
+    "items = model.findall('{*}build/{*}item')",
+    "assert len(items) == 1, 'expected one assembled print'",
+    "assembly = model.find(\".//{*}object[@id='%s']\" % items[0].get('objectid'))",
+    "components = assembly.findall('{*}components/{*}component')",
+    "assert len(components) == 3 and all(c.get('transform') is None for c in components)",
+    "for component in components:",
+    "    mesh = model.find(\".//{*}object[@id='%s']/{*}mesh\" % component.get('objectid'))",
+    "    vertices = mesh.findall('{*}vertices/{*}vertex')",
+    "    for axis in ('x', 'y'):",
+    "        coords = [float(v.get(axis)) for v in vertices]",
+    "        assert abs(min(coords) + max(coords)) < 0.05, 'bearing was displaced on the bed'",
+  ].join("\n"), exportedPath]);
   await page.getByRole("button", { name: "undo", exact: true }).click();
   await expect.poll(() => readFile(join(duo, "model.py"), "utf8")).toBe(original);
   await expect(page.locator("#revision-select")).toHaveValue("3");

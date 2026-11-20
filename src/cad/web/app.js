@@ -3172,6 +3172,7 @@ function exportUrl(format, partName) {
   const query = new URLSearchParams();
   query.set('format', format);
   query.set('rev', store.revision == null ? 'head' : String(store.revision));
+  if (format === '3mf' && byId('export-layout').value) query.set('mode', byId('export-layout').value);
   if (format !== '3mf' && partName) query.set('part', partName);
   return apiPath(`/api/export?${query.toString()}`);
 }

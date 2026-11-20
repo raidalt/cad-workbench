@@ -12,7 +12,7 @@ def test_double_ring_job_reopens_checks_both_interfaces_and_exports(tmp_path):
     build.mkdir()
     status, _, body = execute(build, {"action": "build", "args": {"source": source.replace("clearance = 0.35", "clearance = 0.38")}})
     assert status == 200, body
-    for action, args in [("clearance", {}), ("export", {"format": "3mf"})]:
+    for action, args in [("clearance", {}), ("export", {"format": "3mf", "mode": "multimaterial"})]:
         work = tmp_path / action
         work.mkdir()
         shutil.copyfile(build / "candidate.tar.gz", work / "project.tar.gz")
