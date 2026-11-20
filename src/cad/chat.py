@@ -48,6 +48,7 @@ import urllib.request
 from pathlib import Path
 from urllib.parse import urlparse
 
+from .project import Store, atomic_bytes
 from .errors import CadError
 from .design_skills import skill_context
 from .design_validation import validate_candidate
@@ -510,14 +511,21 @@ def apply_script(root: Path, source: str, *, name: str | None = None) -> dict:
                        hint="ask for the change again; nothing was written") from e
     target = root / name
     backups = root / ".cad" / "backups"
-    backups.mkdir(parents=True, exist_ok=True)
-    stamp = time.strftime("%Y%m%d-%H%M%S") + f"-{time.time_ns() % 1_000_000_000:09d}"
-    backup = None
-    if target.exists():
-        backup = backups / f"{target.stem}-{stamp}{target.suffix}"
-        backup.write_bytes(target.read_bytes())
-    target.write_text(source)
-    return {"file": name, "backup": str(backup) if backup else None, "bytes": len(source)}
+    with Store(root).lock():
+        backups.mkdir(parents=True, exist_ok=True)
+        backup = None
+        data = source.encode("utf-8")
+        if target.exists():
+            stamp = time.strftime("%Y%m%d-%H%M%S") + f"-{time.time_ns() % 1_000_000_000:09d}"
+            backup = backups / f"{target.stem}-{stamp}{target.suffix}"
+            previous = target.read_bytes()
+            edit = {"entry": name, "before": hashlib.sha256(previous).hexdigest(),
+                    "after": hashlib.sha256(data).hexdigest()}
+            atomic_bytes(backups / "receipts" / backup.name, json.dumps(edit).encode())
+            atomic_bytes(backup, previous)
+        atomic_bytes(target, data)
+    return {"file": name, "backup": str(backup) if backup else None, "bytes": len(data)}
+
 
 
 # --------------------------------------------------------------------------- orientation
@@ -729,11 +737,25 @@ def revert(root: Path, backup: str | None, *, name: str | None = None) -> bool:
     """Put a backup back (used when an applied script does not build)."""
     if not backup:
         return False
-    src = Path(backup)
-    if not src.exists():
+    with Store(root).lock():
+        return _restore_backup(root, name or _entry(root), Path(backup))
+
+
+def _restore_backup(root: Path, entry: str, backup: Path) -> bool:
+    target = root / entry
+    record = backup.parent / "receipts" / backup.name
+    if not backup.is_file() or not target.is_file() or not record.is_file():
         return False
-    (root / (name or _entry(root))).write_bytes(src.read_bytes())
+    edit = json.loads(record.read_bytes())
+    previous = backup.read_bytes()
+    if (edit["entry"] != entry or hashlib.sha256(target.read_bytes()).hexdigest() != edit["after"]
+            or hashlib.sha256(previous).hexdigest() != edit["before"]):
+        return False
+    atomic_bytes(target, previous)
+    backup.unlink()
+    record.unlink()
     return True
+
 
 
 # --------------------------------------------------------------------------- streaming
@@ -1085,12 +1107,14 @@ class Runner:
 def undo(root: Path) -> dict:
     """Restore the newest backup of the entry script."""
     entry = _entry(root)
-    stem = Path(entry).stem
-    backups = sorted((root / ".cad" / "backups").glob(f"{stem}-*"))
-    if not backups:
-        raise CadError("NOT_FOUND", "no chat edit to undo", hint="nothing has been applied in this project")
-    latest = backups[-1]
-    target = root / entry
-    target.write_bytes(latest.read_bytes())
-    latest.unlink()
-    return {"restored": str(entry), "from": str(latest)}
+    target = Path(entry)
+    with Store(root).lock():
+        backups = sorted((root / ".cad" / "backups").glob(f"{target.stem}-*{target.suffix}"))
+        if not backups:
+            raise CadError("NOT_FOUND", "no chat edit to undo", hint="nothing has been applied in this project")
+        latest = backups[-1]
+        if not _restore_backup(root, entry, latest):
+            raise CadError("STALE_VIEW", "undo could not verify the current file against this edit",
+                           hint=f"Compare the current file with the saved backup at {latest}.",
+                           details={"backup": str(latest)})
+        return {"restored": entry, "from": str(latest)}

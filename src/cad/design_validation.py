@@ -25,7 +25,7 @@ import time
 from typing import Callable
 
 from .errors import CadError
-from .project import IGNORED_DIRS, ProjectConfig, read_overlay
+from .project import Store, ProjectConfig, read_overlay
 
 VALIDATION_TIMEOUT = 90
 MAX_CORNERS = 12
@@ -82,31 +82,16 @@ def _snapshot(root: Path, target: Path) -> None:
     source. Directory links are supported unless they form a recursive cycle.
     Bound resource use rather than silently omit large/unknown dependencies.
     """
-    files = 0
+    root = root.resolve()
+    target.mkdir(parents=True, exist_ok=True)
     size = 0
-
-    def copy_dir(src: Path, dst: Path, ancestors: frozenset[Path]) -> None:
-        nonlocal files, size
-        resolved = src.resolve()
-        if resolved in ancestors:
-            raise ValueError(f"recursive project directory symlink: {src.relative_to(root)}")
-        dst.mkdir(parents=True, exist_ok=True)
-        for item in sorted(src.iterdir()):
-            if item.name in IGNORED_DIRS or item.name in {".pytest_cache", ".mypy_cache", ".ruff_cache"}:
-                continue
-            dest = dst / item.name
-            if item.is_dir():
-                copy_dir(item, dest, ancestors | {resolved})
-            elif item.is_file():
-                files += 1
-                size += item.stat().st_size
-                if files > 10000 or size > 512 * 1024 * 1024:
-                    raise ValueError("candidate inputs exceed 10,000 files or 512 MiB; move generated outputs outside the project")
-                shutil.copy2(item, dest, follow_symlinks=True)
-            elif item.is_symlink():
-                raise ValueError(f"missing input referenced by symlink: {item.relative_to(root)}")
-
-    copy_dir(root, target, frozenset())
+    for count, item in enumerate(Store(root).source_files(include_overlay=True), start=1):
+        size += item.stat().st_size
+        if count > 10000 or size > 512 * 1024 * 1024:
+            raise ValueError("candidate inputs exceed 10,000 files or 512 MiB; move generated outputs outside the project")
+        dest = target / item.relative_to(root)
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(item, dest, follow_symlinks=True)
 
 
 def _corner_overrides(parameters: dict, base: dict, limit: int = MAX_CORNERS, *, focus: str = "") -> tuple[list[dict], dict]:

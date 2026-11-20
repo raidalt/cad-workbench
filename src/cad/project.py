@@ -188,11 +188,20 @@ def parse_value(text: str) -> Any:
 
 
 def _atomic_write(path: Path, text: str) -> None:
+    atomic_bytes(path, text.encode("utf-8"))
+
+
+def atomic_bytes(path: Path, data: bytes) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.")
-    with os.fdopen(fd, "w") as f:
-        f.write(text)
-    os.replace(tmp, path)
+    try:
+        with os.fdopen(fd, "wb") as f:
+            f.write(data)
+        if path.is_file():
+            os.chmod(tmp, path.stat().st_mode & 0o777)
+        os.replace(tmp, path)
+    finally:
+        Path(tmp).unlink(missing_ok=True)
 
 
 def hash_json(obj: Any) -> str:
@@ -209,14 +218,40 @@ class Store:
         self.cache_dir = self.dir / "cache"
 
     # ---------------------------------------------------------------- sources
-    def source_files(self) -> list[Path]:
-        files = []
-        for dirpath, dirnames, filenames in os.walk(self.root):
-            dirnames[:] = sorted(d for d in dirnames if d not in IGNORED_DIRS and not d.startswith("."))
-            for fn in sorted(filenames):
-                if fn.lower().endswith(SOURCE_SUFFIXES) and fn != PARAMS_NAME:
-                    files.append(Path(dirpath) / fn)
-        return files
+    def source_files(self, *, include_overlay: bool = False) -> list[Path]:
+        """Inputs shared by the watcher, build key, revision and candidate snapshot."""
+        declared = ProjectConfig.load(self.root).raw.get("project", {}).get("inputs", [])
+        if not isinstance(declared, list) or not all(isinstance(v, str) for v in declared):
+            raise CadError(INVALID_ARGUMENT, "project.inputs must be a list of relative file paths")
+        files = set()
+
+        def visit(directory: Path, ancestors: set[Path]) -> None:
+            resolved = directory.resolve()
+            if resolved in ancestors:
+                raise CadError(INVALID_ARGUMENT, f"recursive project directory symlink: {directory}")
+            for path in directory.iterdir():
+                if path.name in IGNORED_DIRS or (path.name.startswith(".") and
+                        (path.is_dir() or not path.name.lower().endswith(SOURCE_SUFFIXES))):
+                    continue
+                if path.is_dir():
+                    visit(path, ancestors | {resolved})
+                elif path.is_file():
+                    files.add(path)
+                elif path.is_symlink():
+                    raise CadError(INVALID_ARGUMENT, f"missing project input: {path}")
+
+        visit(self.root, set())
+        for name in declared:
+            rel = Path(name)
+            if rel.is_absolute() or ".." in rel.parts or not rel.parts or rel.parts[0] == STATE_DIR:
+                raise CadError(INVALID_ARGUMENT, f"invalid project input: {name}")
+            path = self.root / rel
+            if not path.is_file():
+                raise CadError(INVALID_ARGUMENT, f"missing project input: {name}")
+            files.add(path)
+        if not include_overlay:
+            files.discard(self.root / PARAMS_NAME)
+        return sorted(files)
 
     def snapshot_file(self, src: Path, dst: Path, digest: str) -> None:
         """Copy a source file into a revision; large files (imported geometry) are stored once

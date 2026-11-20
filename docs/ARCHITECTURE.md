@@ -134,6 +134,8 @@ that dies while idle is replaced transparently; a crash during a command is
 reported as `WORKER_CRASHED` (exit 6) and the next command starts a new worker,
 which reloads the last successful revision from disk.
 
+Model inputs include ordinary files of any extension under the project directory. Put outputs under `out/` or `renders/` and use `[project].inputs` in `cad.toml` for extra relative file paths such as hidden assets. The watcher, cache, revisions and candidate validation use the same discovery logic. The root `params.toml` contributes effective parameter values to the build key.
+
 **Revisions and caches.** A build's identity is
 `sha256(source files, effective parameters, cad version, kernel)`. Identical
 inputs reuse the existing revision (`cached: true`). Revisions are written to a

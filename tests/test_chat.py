@@ -760,3 +760,15 @@ def test_chat_undo_route_restores_the_file(tmp_path, monkeypatch):
 
             assert (root / "model.py").read_text() == MODEL
             assert list((root / ".cad" / "backups").glob("model-*.py")) == []
+
+
+def test_undo_preserves_later_manual_edit_and_recovery_copy(tmp_path):
+    target = tmp_path / "model.py"
+    target.write_text(MODEL)
+    info = apply_script(tmp_path, NEW_MODEL)
+    target.write_text("# my newer edit")
+    with pytest.raises(CadError, match="undo could not verify") as exc:
+        undo(tmp_path)
+    assert target.read_text() == "# my newer edit"
+    assert Path(exc.value.details["backup"]).read_text() == MODEL
+    assert info["backup"] == exc.value.details["backup"]
