@@ -48,7 +48,7 @@ import urllib.request
 from pathlib import Path
 from urllib.parse import urlparse
 
-from .project import Store, atomic_bytes
+from .edits import apply_script, entry_name, revert, undo, undoable_file
 from .errors import CadError
 from .design_skills import skill_context
 from .design_validation import validate_candidate
@@ -478,20 +478,6 @@ def format_context(state: dict | None) -> str:
 # --------------------------------------------------------------------------- edits
 
 
-def _entry(root: Path) -> str:
-    from .project import ProjectConfig
-
-    try:
-        return ProjectConfig.load(root).entry
-    except Exception:
-        return "model.py"
-
-
-def entry_name(root: Path) -> str:
-    """The project's entry script, relative to ``root`` (e.g. ``model.py``)."""
-    return _entry(root)
-
-
 def extract_script(reply: str) -> str | None:
     """The last fenced block of a reply, if it looks like a full model script."""
     blocks = CODE_BLOCK.findall(reply)
@@ -499,33 +485,6 @@ def extract_script(reply: str) -> str | None:
         if "def build" in block or "from cad import" in block:
             return block.strip() + "\n"
     return None
-
-
-def apply_script(root: Path, source: str, *, name: str | None = None) -> dict:
-    """Back up and write ``source`` as the project's model script (compile-checked)."""
-    name = name or _entry(root)
-    try:
-        compile(source, name, "exec")
-    except SyntaxError as e:
-        raise CadError("INVALID_ARGUMENT", f"the proposed script does not parse: {e.msg} (line {e.lineno})",
-                       hint="ask for the change again; nothing was written") from e
-    target = root / name
-    backups = root / ".cad" / "backups"
-    with Store(root).lock():
-        backups.mkdir(parents=True, exist_ok=True)
-        backup = None
-        data = source.encode("utf-8")
-        if target.exists():
-            stamp = time.strftime("%Y%m%d-%H%M%S") + f"-{time.time_ns() % 1_000_000_000:09d}"
-            backup = backups / f"{target.stem}-{stamp}{target.suffix}"
-            previous = target.read_bytes()
-            edit = {"entry": name, "before": hashlib.sha256(previous).hexdigest(),
-                    "after": hashlib.sha256(data).hexdigest()}
-            atomic_bytes(backups / "receipts" / backup.name, json.dumps(edit).encode())
-            atomic_bytes(backup, previous)
-        atomic_bytes(target, data)
-    return {"file": name, "backup": str(backup) if backup else None, "bytes": len(data)}
-
 
 
 # --------------------------------------------------------------------------- orientation
@@ -733,31 +692,6 @@ def _drop(base_url: str) -> None:
             pass
 
 
-def revert(root: Path, backup: str | None, *, name: str | None = None) -> bool:
-    """Put a backup back (used when an applied script does not build)."""
-    if not backup:
-        return False
-    with Store(root).lock():
-        return _restore_backup(root, name or _entry(root), Path(backup))
-
-
-def _restore_backup(root: Path, entry: str, backup: Path) -> bool:
-    target = root / entry
-    record = backup.parent / "receipts" / backup.name
-    if not backup.is_file() or not target.is_file() or not record.is_file():
-        return False
-    edit = json.loads(record.read_bytes())
-    previous = backup.read_bytes()
-    if (edit["entry"] != entry or hashlib.sha256(target.read_bytes()).hexdigest() != edit["after"]
-            or hashlib.sha256(previous).hexdigest() != edit["before"]):
-        return False
-    atomic_bytes(target, previous)
-    backup.unlink()
-    record.unlink()
-    return True
-
-
-
 # --------------------------------------------------------------------------- streaming
 
 
@@ -941,10 +875,7 @@ class Runner:
         except Exception as e:
             verdict = {"ok": False, "error": error_receipt("INTERNAL", str(e))}
         if verdict is not None and not verdict.get("ok"):
-            restored = revert(self.root, info.get("backup"))
-            if not existed and path.exists():
-                path.unlink()
-                restored = True
+            restored = revert(self.root, info.get("backup"), name=entry, created_source=None if existed else script)
             return {"ok": False, "error": verdict.get("error") or error_receipt("BUILD_FAILED", "the change did not build"),
                     "reverted": restored}
         return {"ok": True, "info": info, "verified": bool(verdict), "revision": (verdict or {}).get("revision")}
@@ -992,7 +923,7 @@ class Runner:
                                   started_at=started, selection=selection, replace_turn=replace_turn, retry_of=retry_of)
             self.emit("chat_error", message=status["reason"], turn=turn, code="NO_API_KEY", outcome=outcome)
             return
-        entry = _entry(self.root)
+        entry = entry_name(self.root)
         source = (self.root / entry).read_text() if (self.root / entry).exists() else ""
         state_text = ""
         if self.context is not None:
@@ -1102,19 +1033,3 @@ class Runner:
                        revision=revision, reverted=bool(committed.get("reverted")), error=error,
                        ms=(time.monotonic() - t0) * 1000, build_ms=apply_ms,
                        active_revision=active_revision if isinstance(active_revision, int) else None))
-
-
-def undo(root: Path) -> dict:
-    """Restore the newest backup of the entry script."""
-    entry = _entry(root)
-    target = Path(entry)
-    with Store(root).lock():
-        backups = sorted((root / ".cad" / "backups").glob(f"{target.stem}-*{target.suffix}"))
-        if not backups:
-            raise CadError("NOT_FOUND", "no chat edit to undo", hint="nothing has been applied in this project")
-        latest = backups[-1]
-        if not _restore_backup(root, entry, latest):
-            raise CadError("STALE_VIEW", "undo could not verify the current file against this edit",
-                           hint=f"Compare the current file with the saved backup at {latest}.",
-                           details={"backup": str(latest)})
-        return {"restored": entry, "from": str(latest)}

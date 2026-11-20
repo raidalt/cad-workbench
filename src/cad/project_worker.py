@@ -18,12 +18,12 @@ from .errors import CadError
 
 
 class ProjectWorker:
-    def __init__(self, root: Path):
+    def __init__(self, root: Path, *, idle_seconds: float = 300):
         self.directory = tempfile.TemporaryDirectory(prefix="cad-w-", dir="/tmp")
         self.socket = str(Path(self.directory.name) / "rpc")
         try:
             self.process = subprocess.Popen(
-                [sys.executable, "-m", "cad.project_worker", str(root), self.socket, str(os.getpid())],
+                [sys.executable, "-m", "cad.project_worker", str(root), self.socket, str(os.getpid()), str(idle_seconds)],
                 stdin=subprocess.DEVNULL, start_new_session=True,
             )
         except BaseException:
@@ -73,7 +73,7 @@ class ProjectWorker:
         self.directory.cleanup()
 
 
-def run(root, address, parent):
+def run(root, address, parent, idle_seconds):
     from .serve import ProjectAPI, Service, event_stream
 
     service = Service(root)
@@ -123,7 +123,7 @@ def run(root, address, parent):
             while not stopping.is_set() and os.getppid() == parent:
                 server.handle_request()
                 with lock:
-                    idle = not active and time.monotonic() - last_used > 300
+                    idle = not active and time.monotonic() - last_used > idle_seconds
                 if idle and not service.builder.building and not service.chat.running:
                     break
         finally:
@@ -131,4 +131,4 @@ def run(root, address, parent):
 
 
 if __name__ == "__main__":
-    run(Path(sys.argv[1]), sys.argv[2], int(sys.argv[3]))
+    run(Path(sys.argv[1]), sys.argv[2], int(sys.argv[3]), float(sys.argv[4]))

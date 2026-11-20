@@ -71,6 +71,7 @@ cad build && cad inspect && cad render --views iso   # renders/r1/*.png
   for Claude Code, Codex and other agents that read the skills.sh format. It teaches them the workflow.
   Agents can also run `cad docs` at any time for the full reference.
 - **Stress analysis later:** re-run the install command with `scripts/install.sh --fea`.
+- Set `CAD_DISABLE_SLICER=1` to skip external slicer discovery, including integration and evaluation runs.
 - **Slicing** (`cad slice`: print time, filament grams, a ready-to-print `.gcode.3mf`) needs
   [Bambu Studio](https://bambulab.com/en/download/studio). `cad` looks for it:
   - in `/Applications` on macOS;

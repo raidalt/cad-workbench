@@ -72,7 +72,8 @@ class ProjectSession:
         entry = self.root / cfg.entry
         if not entry.exists():
             raise CadError(NOT_FOUND, f"entry script {cfg.entry} not found in {self.root}", hint="set [project].entry in cad.toml")
-        params = dict(read_overlay(self.root))
+        project_overrides = read_overlay(self.root)
+        params = dict(project_overrides)
         params.update(overrides or {})
         key, src_hash, files = self.build_key(params)
         t0 = time.perf_counter()
@@ -120,8 +121,12 @@ class ProjectSession:
             src = tmp / "source"
             for rel, digest in files.items():
                 self.store.snapshot_file(self.root / rel, src / rel, digest)
+            if self.store.source_hash()[0] != src_hash or read_overlay(self.root) != project_overrides:
+                raise CadError("STALE_SOURCE", "project inputs changed during the build",
+                               hint="rebuild the current files to publish a consistent revision")
             manifest = {
                 "revision": rev,
+                "project_overrides": project_overrides,
                 "key": key,
                 "created_at": now_iso(),
                 "project": self.config.name,

@@ -259,17 +259,29 @@ class Store:
         dst.parent.mkdir(parents=True, exist_ok=True)
         if src.stat().st_size < 256 * 1024:
             shutil.copy2(src, dst)
+            self._verify_copy(dst, digest)
             return
         blob = self.cache_dir / "blobs" / digest
         if not blob.exists():
             blob.parent.mkdir(parents=True, exist_ok=True)
             tmp = blob.with_suffix(".tmp")
-            shutil.copyfile(src, tmp)
-            os.replace(tmp, blob)
+            try:
+                shutil.copyfile(src, tmp)
+                self._verify_copy(tmp, digest)
+                os.replace(tmp, blob)
+            finally:
+                tmp.unlink(missing_ok=True)
         try:
             os.link(blob, dst)
         except OSError:
             shutil.copyfile(blob, dst)
+
+    @staticmethod
+    def _verify_copy(path: Path, expected: str) -> None:
+        with path.open("rb") as stream:
+            if hashlib.file_digest(stream, "sha256").hexdigest() != expected:
+                raise CadError("STALE_SOURCE", "source file changed while saving the revision",
+                               hint="rebuild the current project")
 
     def source_hash(self) -> tuple[str, dict[str, str]]:
         per = {}

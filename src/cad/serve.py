@@ -599,10 +599,7 @@ class Builder:
             try:
                 result = self.session.build(None)
             except Exception as exc:
-                restored = chat.revert(project, info.get("backup"), name=entry)
-                if not existed:
-                    path.unlink(missing_ok=True)
-                    restored = True
+                restored = chat.revert(project, info.get("backup"), name=entry, created_source=None if existed else script)
                 if restored and last_build is not None:
                     store.write_last_build(last_build)
                 self.frames.abort()
@@ -626,7 +623,7 @@ class Builder:
     def new_model(self, source: str | None = None) -> dict:
         """Replace the entry script with ``source`` (or the empty starter) and build it."""
         from . import chat
-        from .project import read_overlay, write_overlay
+        from .project import read_overlay
 
         source = chat.NEW_MODEL_TEMPLATE if source is None else source
         if not isinstance(source, str) or not source.strip():
@@ -643,19 +640,12 @@ class Builder:
                 if (not manifest["parts"] and not manifest["overrides"]
                         and manifest["source_hash"] == store.source_hash()[0]):
                     return {"ok": True, "revision": head, "backup": None, "cleared_overrides": []}
-            info = chat.apply_script(self.session.root, source)  # compile-checked, old file backed up
-            if stale:
-                stamp = time.strftime("%Y%m%d-%H%M%S")
-                params = self.session.root / "params.toml"
-                if params.exists():
-                    backups = self.session.root / ".cad" / "backups"
-                    backups.mkdir(parents=True, exist_ok=True)
-                    (backups / f"params-{stamp}.toml").write_bytes(params.read_bytes())
-                write_overlay(self.session.root, {})
+            existed = path.exists()
+            info = chat.apply_script(self.session.root, source, clear_overrides=True)
             try:
                 result = self.session.build(None, force=True)
-            except CadError:
-                chat.revert(self.session.root, info.get("backup"))
+            except Exception:
+                chat.revert(self.session.root, info.get("backup"), created_source=None if existed else source)
                 if self.watcher is not None:
                     self.watcher.accept()
                 raise
@@ -690,10 +680,10 @@ class Builder:
             info = chat.apply_script(self.session.root, new_source)
             verdict = self.verify_apply()
             if not verdict.get("ok"):
-                chat.revert(self.session.root, info.get("backup"))
+                restored = chat.revert(self.session.root, info.get("backup"))
                 if self.watcher is not None:
                     self.watcher.accept()
-                return {"ok": False, "error": verdict.get("error") or {}, "reverted": True}
+                return {"ok": False, "error": verdict.get("error") or {}, "reverted": restored}
             self.last_error = None
             if self.watcher is not None:
                 self.watcher.accept()
@@ -842,7 +832,8 @@ class ChatManager:
         cfg = self.chat.config()
         with self._lock:
             chat_id, messages = self.chat.conversation(self.root)
-            return {**cfg, "running": self.running, "chat_id": chat_id, "history": messages}
+            return {**cfg, "running": self.running, "chat_id": chat_id, "history": messages,
+                    "undo_file": self.chat.undoable_file(self.root)}
 
     def start(self, message: str, retry_turn: str | None = None, viewing=None,
               selection=None, chat_id: str | None = None) -> dict:
@@ -1010,19 +1001,25 @@ class ProjectAPI:
                 return self._json(self.chat.stop())
             if path == "/api/chat/undo":
                 with self.builder.model_lock:
+                    self.builder._guard_viewing(body.get("viewing"))
                     info = self.chat.undo()
                     self.builder.request(force=True)
                 return self._json({"ok": True, **info})
             if path == "/api/new-model":
-                return self._json(self.builder.new_model(body.get("source")))
+                with self.builder.model_lock:
+                    self.builder._guard_viewing(body.get("viewing"))
+                    return self._json(self.builder.new_model(body.get("source")))
             if path == "/api/orient":
                 return self._json(self.builder.orient(body.get("part"), body.get("ref"), viewing=body.get("viewing")))
             if path == "/api/build":
-                self.builder.request(body.get("params"), force=bool(body.get("force")))
+                with self.builder.model_lock:
+                    self.builder._guard_viewing(body.get("viewing"))
+                    self.builder.request(body.get("params"), force=bool(body.get("force")))
                 return self._json({"ok": True, "queued": True})
             if path == "/api/param":
                 values = body.get("values") or {}
                 with self.builder.model_lock:
+                    self.builder._guard_viewing(body.get("viewing"))
                     self.builder.session.set_params(values, force=bool(body.get("force")))
                     if self.builder.watcher is not None:
                         self.builder.watcher.accept()  # our own write must not look like an edit
@@ -1241,6 +1238,8 @@ class Service:
         self._old_sink = None
 
     def start(self) -> "Service":
+        if os.environ.get("VERCEL") == "1":
+            raise CadError("INVALID_ARGUMENT", "use the hosted Sandbox job endpoint on Vercel")
         handler = type("CadHandler", (Handler,), {"builder": self.builder, "hub": self.hub, "chat": self.chat,
                                                 "gallery": self.gallery, "project_api": ProjectAPI(self, self.gallery is not None)})
         httpd = None
@@ -1265,11 +1264,22 @@ class Service:
         self._old_sink = live.set_sink(self._sink)
         self.builder.start()
         self.watcher.start()
-        if self.session.store.head() is None:
-            self.builder.request()
+        from .project import read_overlay
+
+        store = self.session.store
+        head = store.head()
+        current = False
+        if head is not None:
+            manifest = store.manifest(head)
+            try:
+                current = (store.source_hash()[0] == manifest["source_hash"]
+                           and read_overlay(self.root) == manifest.get("project_overrides", manifest["overrides"]))
+            except (CadError, OSError, ValueError):
+                pass  # schedule a build so the error reaches the workspace
+        if current:
+            self.builder.publish_state(reason="ready", revision=head)
         else:
-            self.watcher.accept()
-            self.builder.publish_state(reason="ready", revision=self.session.store.head())
+            self.builder.request()
         return self
 
     @property
