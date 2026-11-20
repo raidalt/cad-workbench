@@ -30,6 +30,13 @@ class ProjectWorker:
             self.directory.cleanup()
             raise
 
+        self._reaper = threading.Thread(target=self._reap, name="cad-worker-reaper", daemon=True)
+        self._reaper.start()
+
+    def _reap(self):
+        self.process.wait()
+        self.directory.cleanup()
+
     @contextlib.contextmanager
     def _call(self, message):
         deadline = time.monotonic() + 30
@@ -70,7 +77,7 @@ class ProjectWorker:
             except subprocess.TimeoutExpired:
                 self.process.kill()
                 self.process.wait()
-        self.directory.cleanup()
+        self._reaper.join()
 
 
 def run(root, address, parent, idle_seconds):

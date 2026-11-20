@@ -99,8 +99,8 @@ class Gallery:
         with self._preview_lock:
             if cache.is_file():
                 return cache.read_bytes()
-            code, data, _, _ = self.worker(path).request(
-                "GET", "/api/preview", urlencode({"rev": rev}), None, "application/json")
+            code, data, _, _ = self.request(
+                path, "GET", "/api/preview", urlencode({"rev": rev}), None, "application/json")
             if code != 200:
                 raise CadError("NOT_FOUND", "No preview for this project.")
             cache.parent.mkdir(parents=True, exist_ok=True)
@@ -127,6 +127,17 @@ class Gallery:
             if path not in self._children:
                 self._children[path] = ProjectWorker(path)
             return self._children[path]
+
+    def request(self, root, method, path, query, body, content_type):
+        worker = self.worker(root)
+        try:
+            return worker.request(method, path, query, body, content_type)
+        except CadError as error:
+            # An idle worker can exit between lookup and connect. Only retry if
+            # the socket was never connected and the process has actually exited.
+            if error.code != "WORKER_UNAVAILABLE" or worker.process.poll() is None:
+                raise
+            return self.worker(root).request(method, path, query, body, content_type)
 
     def stop(self) -> None:
         with self._lock:

@@ -207,6 +207,7 @@ def test_new_model_undo_preserves_intervening_override(tmp_path):
 
 
 def test_idle_worker_releases_process_and_gallery_resumes_project(tmp_path):
+    from pathlib import Path
     from cad.gallery import Gallery
     from cad.project_worker import ProjectWorker
 
@@ -218,7 +219,11 @@ def test_idle_worker_releases_process_and_gallery_resumes_project(tmp_path):
     gallery._children[root] = worker
     try:
         worker.request("GET", "/api/state", "", None, "application/json")
-        assert worker.process.wait(timeout=12) == 0
+        socket_dir = Path(worker.directory.name)
+        deadline = time.monotonic() + 12
+        while socket_dir.exists() and time.monotonic() < deadline:
+            time.sleep(.05)
+        assert not socket_dir.exists() and worker.process.returncode == 0
         resumed = gallery.worker(root)
         assert resumed.process.pid != worker.process.pid
         code, data, _, _ = resumed.request("GET", "/api/state", "", None, "application/json")

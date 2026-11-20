@@ -1136,7 +1136,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def _project(self, method, u, body):
         path = u.path
-        worker = None
+        root = self.gallery.current if self.gallery else None
         if path.startswith("/projects/") and self.gallery is not None:
             key, _, route = path[len("/projects/"):].partition("/")
             root = self.gallery.project_path(unquote(key))
@@ -1147,18 +1147,15 @@ class Handler(BaseHTTPRequestHandler):
             path = "/" + route
             if not path.startswith("/api/"):
                 raise CadError("NOT_FOUND", "Unknown workspace route")
-            worker = self.gallery.worker(root)
-        elif self.gallery is not None:
-            worker = self.gallery.worker(self.gallery.current)
 
         if method == "GET" and path == "/api/events":
-            stream = worker.events() if worker else event_stream(self.hub)
+            stream = self.gallery.worker(root).events() if self.gallery else event_stream(self.hub)
             return self._events(stream)
 
-        api = worker or self.project_api
-        return self._send(*api.request(method, path, u.query, body, self.headers.get_content_type()))
+        args = method, path, u.query, body, self.headers.get_content_type()
+        response = self.gallery.request(root, *args) if self.gallery else self.project_api.request(*args)
+        return self._send(*response)
 
-    # -- static
     def _static(self, name: str) -> None:
         target = (WEB_DIR / name).resolve()
         if target.is_dir():  # a built sub-app (e.g. /static/chat/)
