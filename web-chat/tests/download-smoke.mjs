@@ -70,10 +70,22 @@ try {
   await expect(page.locator("#revision-select")).toHaveValue("1", { timeout: 20000 });
   await expect(page.locator("#status-connection")).toHaveText("live");
   await expect(page.locator("#play")).not.toHaveClass(/\bon\b/);
+  for (const part of ["middle", "outer"]) {
+    const row = page.locator(".part-row").filter({ has: page.getByRole("button", { name: part, exact: true }) });
+    await row.getByRole("checkbox").uncheck();
+  }
+  await page.locator("#view-preset").selectOption("front");
   await expect(async () => {
     await page.locator("#gl").click();
     await expect(page.locator("#chat-root")).toContainText(/face \d+/, { timeout: 1000 });
   }).toPass({ timeout: 20000 });
+  await expect.poll(() => page.evaluate(() => window.cadWorkspace.inspection?.face?.info?.center?.length)).toBe(3);
+  const bearing = await page.evaluate(() => {
+    const inspection = window.cadWorkspace.inspection;
+    return { part: inspection.target.part, z: inspection.face.info.center[2] };
+  });
+  assert.equal(bearing.part, "hub");
+  assert.ok(bearing.z > 2 && bearing.z < 8, "selected a lateral bearing surface of the spindle");
   const composer = page.locator("#chat-root textarea");
   await composer.fill("Change both bearing clearances to 0.38 mm.");
   await composer.press("Enter");

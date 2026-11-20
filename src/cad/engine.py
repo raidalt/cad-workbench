@@ -947,23 +947,28 @@ class ProjectSession:
         self.store.set_head(r)
         return {"head": r, "note": "active revision changed; source files were not modified (use `cad restore` to restore sources)"}
 
-    def restore(self, rev, *, force: bool = False) -> dict:
+    def restore(self, rev, *, force: bool = False, remove_added: bool = False) -> dict:
         r = self.resolve_rev(rev)
         m = self.store.manifest(r)
         src = self.store.revision_dir(r) / "source"
         _, current = self.store.source_hash()
         changed = [f for f, h in m["source_files"].items() if current.get(f) != h]
-        if not changed:
+        added = sorted(current.keys() - m["source_files"].keys()) if remove_added else []
+        overlay = m.get("project_overrides", m.get("overrides", {}))
+        params_changed = read_overlay(self.root) != overlay
+        if not changed and not params_changed and not added:
             return {"revision": r, "restored": [], "note": "sources already match"}
         if not force:
-            raise CadError(INVALID_ARGUMENT, f"restoring revision {r} would overwrite {len(changed)} file(s)",
-                           hint="re-run with --force to overwrite", details={"files": changed})
+            raise CadError(INVALID_ARGUMENT, f"restoring revision {r} would replace working project inputs",
+                           hint="re-run with --force to restore the revision", details={"files": changed, "parameters": params_changed})
         for f in changed:
             dst = self.root / f
             dst.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(src / f, dst)
-        overlay = m.get("overrides", {})
-        write_overlay(self.root, overlay)
+        for f in added:
+            (self.root / f).unlink()
+        if params_changed:
+            write_overlay(self.root, overlay)
         self.store.set_head(r)
         return {"revision": r, "restored": changed, "params": overlay}
 

@@ -225,3 +225,27 @@ def test_idle_worker_releases_process_and_gallery_resumes_project(tmp_path):
         assert code == 200 and json.loads(data)["head"] == 1
     finally:
         gallery.stop()
+
+
+def test_asset_edit_during_build_does_not_publish_an_inconsistent_revision(tmp_path, monkeypatch):
+    import pytest
+    import cad.engine as engine
+    from cad.errors import CadError
+
+    root = write_project(tmp_path)
+    asset = root / "wall.data"
+    asset.write_text("first")
+    session = engine.ProjectSession(root)
+    head = session.build()["revision"]
+    original = engine.run_script
+
+    def edit_during_build(*args, **kwargs):
+        output = original(*args, **kwargs)
+        asset.write_text("second")
+        return output
+
+    monkeypatch.setattr(engine, "run_script", edit_during_build)
+    with pytest.raises(CadError, match="STALE_SOURCE"):
+        session.build(force=True)
+    assert session.store.revision_numbers() == [head]
+    assert session.store.head() == head

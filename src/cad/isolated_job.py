@@ -8,11 +8,10 @@ import tarfile
 from pathlib import Path
 from urllib.parse import urlencode
 
-from .edits import apply_script, undo
 from .design_validation import validate_candidate
 from .engine import ProjectSession
 from .errors import CadError
-from .project import ProjectConfig, init_project, read_overlay
+from .project import ProjectConfig, atomic_bytes, init_project, read_overlay
 from .serve import ProjectAPI, Service
 
 
@@ -29,7 +28,11 @@ def execute(work: Path, request: dict):
     action = request["action"]
     args = request.get("args") or {}
     entry = ProjectConfig.load(project).entry
+    undo_file = session.store.dir / "hosted-undo.json"
     if action in {"build", "validate"}:
+        previous = session.store.head()
+        if action == "build" and previous is None:
+            previous = session.build()["revision"]
         for filename, encoded in args.get("files", {}).items():
             rel = Path(filename)
             dest = project / rel
@@ -49,11 +52,19 @@ def execute(work: Path, request: dict):
         if action == "validate" or not validation["ok"]:
             return (200 if validation["ok"] else 422), "application/json", json.dumps(validation).encode()
         if not (project / entry).exists() or (project / entry).read_text() != source:
-            apply_script(project, source, name=entry)
+            atomic_bytes(project / entry, source.encode())
         result = session.build()
+        if result["revision"] != previous:
+            history = json.loads(undo_file.read_bytes()) if undo_file.is_file() else []
+            history.append(previous)
+            atomic_bytes(undo_file, json.dumps(history).encode())
     elif action == "undo":
-        undo(project)
+        history = json.loads(undo_file.read_bytes()) if undo_file.is_file() else []
+        if not history:
+            raise CadError("NOT_FOUND", "there is no hosted edit to undo")
+        session.restore(history.pop(), force=True, remove_added=True)
         result = session.build()
+        atomic_bytes(undo_file, json.dumps(history).encode())
     elif action == "clearance":
         result = session.clearance(rev=args.get("rev"))
         return 200, "application/json", json.dumps(result).encode()
