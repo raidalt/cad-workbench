@@ -8,11 +8,17 @@ numbers, look at deterministic headless renders, revise, and export STEP/STL.
 
 ## Get started
 
-Install from the [source build instructions](#building-from-source). From the repository root, open a verified spinner in the workspace:
+Download and unzip this repository (or clone it). Open a terminal in the folder containing this README and run:
 
 ```sh
-cad serve --project samples/improved-fidget-spinners/trilobe --library samples/improved-fidget-spinners
+pnpm run dev
 ```
+
+The workspace opens in your browser with an editable three-lobe spinner. The first launch downloads the CAD runtime and locked dependencies. Later launches reuse them. You can also run `npm run dev` or `sh scripts/dev.sh`. The downloaded source already includes the compiled chat interface.
+
+Use **Projects** to create and reopen designs. Projects persist across downloads in `~/Library/Application Support/CAD Workbench/projects` on macOS and `${XDG_DATA_HOME:-~/.local/share}/CAD Workbench/projects` on Linux. Set `CAD_WORKBENCH_PROJECTS` to choose another folder. Press Ctrl+C in the terminal to stop the app. Run `pnpm run dev --no-open` to print the local URL without opening a browser.
+
+On a minimal Linux installation, install the [system libraries](#1-linux-only-system-libraries) first. For the standalone `cad` CLI and optional stress analysis, use the [source build instructions](#building-from-source).
 
 Browse [editable sample projects](samples), inspect the [spinner cross-sections](samples/improved-fidget-spinners/preview.png), or [download four assembled STLs](samples/improved-fidget-spinners/spinners.zip). Spinner clearances and axial retention were tested digitally.
 
