@@ -10,7 +10,7 @@ f:"ViewportBoundary"
 :HL["/static/chat/_next/static/chunks/2bryqh1c7m4dx.css","style"]
 :HL["/static/style.css","style"]
 6:X
-8:T3260,<div id="app">
+8:T325c,<div id="app">
   <header id="topbar">
     <div class="project-heading">
       <a id="projects-link" class="topbar-link hidden" href="/projects">Projects</a>
@@ -66,7 +66,7 @@ f:"ViewportBoundary"
           <details class="project-details"><summary>Project details</summary><div id="project-info" class="kv"></div></details>
           <div class="row">
             <label class="grow" for="revision-select">revision</label>
-            <select id="revision-select"></select>
+            <span id="revision-picker"></span>
           </div>
           <div class="project-actions">
           <button type="button" id="btn-rebuild" title="Rebuild the current script">Rebuild</button>
@@ -272,15 +272,15 @@ f:"ViewportBoundary"
 </div>
 <div id="toast" class="hidden" role="status"></div>
 7:[["children",{"s":"__PAGE__","h":160,"d":{"r":["$","$1","c",{"children":[[["$","div",null,{"dangerouslySetInnerHTML":{"__html":"$8"}}],"$L9"],["$La","$Lb","$Lc"],"$Ld"]}],"p":"$@e","v":null,"s":"$6"}}]]
-0:{"t":{"t":{"s":"","h":80,"d":{"r":["$","$1","c",{"children":[[["$","link","0",{"rel":"stylesheet","href":"/static/chat/_next/static/chunks/2bryqh1c7m4dx.css","precedence":"next"}],["$","script","script-0",{"src":"/static/chat/_next/static/chunks/3w3g622tlr305.js","async":true}]],["$","html",null,{"lang":"en","className":"dark","children":[["$","head",null,{"children":[["$","link",null,{"rel":"stylesheet","href":"/static/style.css"}],["$","script",null,{"type":"importmap","dangerouslySetInnerHTML":{"__html":"{\"imports\":{\"three\":\"/static/vendor/three.module.min.js\",\"three/addons/\":\"/static/vendor/\",\"three/webgpu\":\"/static/vendor/three.webgpu.min.js\"}}"}}]]}],["$","body",null,{"className":"cad-native-ui","children":["$","$L3",null,{"parallelRouterKey":"children","template":["$","$L4",null,{}],"notFound":[[["$","title",null,{"children":"404: This page could not be found."}],["$","div",null,{"style":{"fontFamily":"system-ui,\"Segoe UI\",Roboto,Helvetica,Arial,sans-serif,\"Apple Color Emoji\",\"Segoe UI Emoji\"","height":"100vh","textAlign":"center","display":"flex","flexDirection":"column","alignItems":"center","justifyContent":"center"},"children":["$","div",null,{"children":[["$","style",null,{"dangerouslySetInnerHTML":{"__html":"body{color:#000;background:#fff;margin:0}.next-error-h1{border-right:1px solid rgba(0,0,0,.3)}@media (prefers-color-scheme:dark){body{color:#fff;background:#000}.next-error-h1{border-right:1px solid rgba(255,255,255,.3)}}"}}],["$","h1",null,{"className":"next-error-h1","style":{"display":"inline-block","margin":"0 20px 0 0","padding":"0 23px 0 0","fontSize":24,"fontWeight":500,"verticalAlign":"top","lineHeight":"49px"},"children":404}],["$","div",null,{"style":{"display":"inline-block"},"children":["$","h2",null,{"style":{"fontSize":14,"fontWeight":400,"lineHeight":"49px","margin":0},"children":"This page could not be found."}]}]]}]}]],[]]}]}]]}]]}],"p":"$@5","v":null,"s":"$6"},"c":"$Q7"},"h":{"r":["$","$1","h",{"children":[null,["$","$L10",null,{"children":[["$","meta","0",{"charSet":"utf-8"}],["$","meta","1",{"name":"viewport","content":"width=device-width, initial-scale=1"}],["$","meta","2",{"name":"color-scheme","content":"dark"}]]}],["$","$L12",null,{"children":[["$","div",null,{"hidden":true,"children":["$","$13",null,{"name":"Next.Metadata","children":[["$","title","0",{"children":"CAD Workspace"}],["$","meta","1",{"name":"description","content":"Chat with the model that edits model.py"}]]}]}],null]}],null]}],"p":"$@14","v":null,"s":"$6"}},"a":"$@15","u":"$@16","b":"0yt8_yn-mb82ryMGHO5oQ"}
+0:{"t":{"t":{"s":"","h":80,"d":{"r":["$","$1","c",{"children":[[["$","link","0",{"rel":"stylesheet","href":"/static/chat/_next/static/chunks/2bryqh1c7m4dx.css","precedence":"next"}],["$","script","script-0",{"src":"/static/chat/_next/static/chunks/3w3g622tlr305.js","async":true}]],["$","html",null,{"lang":"en","className":"dark","children":[["$","head",null,{"children":[["$","link",null,{"rel":"stylesheet","href":"/static/style.css"}],["$","script",null,{"type":"importmap","dangerouslySetInnerHTML":{"__html":"{\"imports\":{\"three\":\"/static/vendor/three.module.min.js\",\"three/addons/\":\"/static/vendor/\",\"three/webgpu\":\"/static/vendor/three.webgpu.min.js\"}}"}}]]}],["$","body",null,{"className":"cad-native-ui","children":["$","$L3",null,{"parallelRouterKey":"children","template":["$","$L4",null,{}],"notFound":[[["$","title",null,{"children":"404: This page could not be found."}],["$","div",null,{"style":{"fontFamily":"system-ui,\"Segoe UI\",Roboto,Helvetica,Arial,sans-serif,\"Apple Color Emoji\",\"Segoe UI Emoji\"","height":"100vh","textAlign":"center","display":"flex","flexDirection":"column","alignItems":"center","justifyContent":"center"},"children":["$","div",null,{"children":[["$","style",null,{"dangerouslySetInnerHTML":{"__html":"body{color:#000;background:#fff;margin:0}.next-error-h1{border-right:1px solid rgba(0,0,0,.3)}@media (prefers-color-scheme:dark){body{color:#fff;background:#000}.next-error-h1{border-right:1px solid rgba(255,255,255,.3)}}"}}],["$","h1",null,{"className":"next-error-h1","style":{"display":"inline-block","margin":"0 20px 0 0","padding":"0 23px 0 0","fontSize":24,"fontWeight":500,"verticalAlign":"top","lineHeight":"49px"},"children":404}],["$","div",null,{"style":{"display":"inline-block"},"children":["$","h2",null,{"style":{"fontSize":14,"fontWeight":400,"lineHeight":"49px","margin":0},"children":"This page could not be found."}]}]]}]}]],[]]}]}]]}]]}],"p":"$@5","v":null,"s":"$6"},"c":"$Q7"},"h":{"r":["$","$1","h",{"children":[null,["$","$L10",null,{"children":[["$","meta","0",{"charSet":"utf-8"}],["$","meta","1",{"name":"viewport","content":"width=device-width, initial-scale=1"}],["$","meta","2",{"name":"color-scheme","content":"dark"}]]}],["$","$L12",null,{"children":[["$","div",null,{"hidden":true,"children":["$","$13",null,{"name":"Next.Metadata","children":[["$","title","0",{"children":"CAD Workspace"}],["$","meta","1",{"name":"description","content":"Chat with the model that edits model.py"}]]}]}],null]}],null]}],"p":"$@14","v":null,"s":"$6"}},"a":"$@15","u":"$@16","b":"e35l_3n0WeE9KNoVjLIC8"}
 17:"/static/chat/_next/static/chunks/0sokki1cqfq9f.js"
-18:"/static/chat/_next/static/chunks/0feh7vpi_j9dt.js"
+18:"/static/chat/_next/static/chunks/2ie7yeyrp_t6t.js"
 19:"/static/chat/_next/static/chunks/0tpqe7ppin5pj.js"
 1a:I[41858,["$2","$17","$18","$19"],"WorkspacePanel"]
 1b:I[77173,["$2"],"OutletBoundary"]
 9:["$","$L1a",null,{}]
 a:["$","script","script-0",{"src":"/static/chat/_next/static/chunks/0sokki1cqfq9f.js","async":true}]
-b:["$","script","script-1",{"src":"/static/chat/_next/static/chunks/0feh7vpi_j9dt.js","async":true}]
+b:["$","script","script-1",{"src":"/static/chat/_next/static/chunks/2ie7yeyrp_t6t.js","async":true}]
 c:["$","script","script-2",{"src":"/static/chat/_next/static/chunks/0tpqe7ppin5pj.js","async":true}]
 d:["$","$L1b",null,{"children":["$","$13",null,{"name":"Next.MetadataOutlet","children":"$@1c"}]}]
 6:300

@@ -456,6 +456,7 @@ export function ChatApp() {
         const data = (await response.json()) as ChatApiState;
         if (disposed || request !== loadNumber || previousChat !== chatIdRef.current) return;
 
+        setApplied(data.undo_file ? { file: data.undo_file } : null);
         setMeta({
           available: data.available !== false,
           model: typeof data.model === "string" ? data.model : "",
@@ -648,7 +649,6 @@ export function ChatApp() {
       });
 
       listen("build_ok", () => {
-        setApplied(null);
         void refreshBoard();
       });
 
@@ -874,7 +874,10 @@ export function ChatApp() {
     setUndoing(true);
     setNotice(null);
     try {
-      const response = await fetch(workspacePath() + "/api/chat/undo", { method: "POST" });
+      const response = await fetch(workspacePath() + "/api/chat/undo", { method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ viewing: boardRef.current?.revision }),
+      });
       if (response.ok) {
         setApplied(null);
       } else {
@@ -969,7 +972,7 @@ export function ChatApp() {
           <button
             type="button"
             onClick={() => void undo()}
-            disabled={undoing}
+            disabled={undoing || board?.head !== board?.revision}
             className="ml-auto shrink-0 border border-[var(--line)] bg-[var(--panel)] px-1.5 py-px text-[9px] text-[var(--text)] hover:border-[var(--line-hover)] hover:text-[var(--text-strong)] disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
           >
             undo

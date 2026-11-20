@@ -95,36 +95,12 @@ function fmtPoint(point) {
   return point.slice(0, 3).map((v) => fmt(v, 1)).join(', ');
 }
 
-function numOrNull(value) {
-  if (value == null || value === '') return null;
-  const n = Number(value);
-  return Number.isFinite(n) ? n : null;
-}
-
 function niceNumber(x) {
   if (!(x > 0) || !Number.isFinite(x)) return 1;
   const exp = Math.floor(Math.log10(x));
   const f = x / 10 ** exp;
   const nice = f < 1.5 ? 1 : f < 3 ? 2 : f < 7 ? 5 : 10;
   return nice * 10 ** exp;
-}
-
-function stepFor(min, max) {
-  const range = max - min;
-  if (!(range > 0)) return 0.1;
-  const raw = range / 100;
-  const exp = Math.floor(Math.log10(raw));
-  const f = raw / 10 ** exp;
-  const nice = f <= 1 ? 1 : f <= 2 ? 2 : f <= 5 ? 5 : 10;
-  return Math.max(nice * 10 ** exp, 1e-3);
-}
-
-function stepDecimals(step) {
-  const text = String(step);
-  const e = text.indexOf('e-');
-  if (e >= 0) return Math.min(6, Number(text.slice(e + 2)) || 0);
-  const dot = text.indexOf('.');
-  return dot >= 0 ? text.length - dot - 1 : 0;
 }
 
 function sanitizeName(name) {
@@ -1427,22 +1403,6 @@ function updateChrome() {
     info.appendChild(el('span', null, String(Object.keys(doc.parts || {}).length)));
   }
 
-  const revisions = (doc && doc.revisions) || [];
-  const select = byId('revision-select');
-  const signature = revisions.map((r) => `${r.n}${r.head ? 'h' : ''}`).join(',');
-  if (select.dataset.signature !== signature) {
-    select.dataset.signature = signature;
-    clearNode(select);
-    for (const revision of revisions) {
-      const option = document.createElement('option');
-      option.value = String(revision.n);
-      option.textContent = `r${revision.n}${revision.head ? ' (head)' : ''}`;
-      select.appendChild(option);
-    }
-  }
-  select.disabled = !revisions.length;
-  if (doc && doc.revision != null) select.value = String(doc.revision);
-
   const stdout = (doc && doc.stdout) || '';
   byId('stdout-box').classList.toggle('hidden', !stdout);
   setText(byId('stdout'), stdout);
@@ -1656,79 +1616,6 @@ function jumpToFeature(featureId) {
   return true;
 }
 
-function renderParams() {
-  const host = byId('params-list');
-  const doc = store.doc;
-  if (!doc) {
-    clearNode(host);
-    host.appendChild(el('div', 'note', 'connecting'));
-    return;
-  }
-  const active = document.activeElement;
-  if (active && host.contains(active) && active.type === 'range') return;
-
-  const params = doc.parameters || {};
-  const overrides = doc.overrides || {};
-  const names = Object.keys(params);
-  clearNode(host);
-  if (!names.length) {
-    host.appendChild(el('div', 'note', 'no parameters declared'));
-    return;
-  }
-
-  for (const name of names) {
-    const param = params[name] || {};
-    const min = numOrNull(param.min);
-    const max = numOrNull(param.max);
-    const numeric = typeof param.default === 'number' || typeof param.value === 'number';
-    const bounded = numeric && min != null && max != null && max > min;
-    const overridden = own(overrides, name);
-    const current = overridden ? overrides[name] : (param.value != null ? param.value : param.default);
-    const step = bounded ? stepFor(min, max) : 0.1;
-    const digits = bounded ? stepDecimals(step) : 2;
-
-    const row = el('div', 'param');
-    const head = el('div', 'param-head');
-    head.appendChild(el('span', 'param-name', name));
-    if (overridden) head.appendChild(el('span', 'chip tiny', 'override'));
-    const valueNode = el('span', 'param-value', bounded ? fmtNumber(current, digits) : formatScalar(current));
-    head.appendChild(valueNode);
-    if (param.unit) head.appendChild(el('span', 'param-unit', param.unit));
-    row.appendChild(head);
-
-    if (bounded) {
-      const slider = document.createElement('input');
-      slider.type = 'range';
-      slider.min = String(min);
-      slider.max = String(max);
-      slider.step = String(step);
-      slider.value = String(clamp(Number(current), min, max));
-      slider.disabled = isBrowsingHistory();
-      if (isBrowsingHistory()) slider.title = 'read-only while viewing history — return to current to change a parameter';
-      slider.addEventListener('input', () => {
-        setText(valueNode, fmtNumber(slider.value, digits));
-        queueParam(name, Number(slider.value));
-      });
-      slider.addEventListener('blur', () => renderParams());
-      row.appendChild(slider);
-
-      const foot = el('div', 'param-foot');
-      foot.append(el('span', 'dim', fmt(min, digits)), el('span', 'dim', fmt(max, digits)));
-      const reset = el('button', 'param-reset', 'reset');
-      reset.type = 'button';
-      reset.disabled = !overridden || isBrowsingHistory();
-      reset.title = `reset to ${formatScalar(param.default)}`;
-      reset.addEventListener('click', () => queueParam(name, param.default));
-      foot.appendChild(reset);
-      row.appendChild(foot);
-    } else {
-      row.appendChild(el('div', 'param-foot dim', 'read-only'));
-    }
-    if (param.description) row.title = param.description;
-    host.appendChild(row);
-  }
-}
-
 function queueParam(name, value) {
   if (isBrowsingHistory()) {
     showToast(`viewing r${store.viewRevision} — return to the current revision to change a parameter`);
@@ -1748,14 +1635,14 @@ async function commitParams() {
     const response = await fetch(apiPath('/api/param'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ values }),
+      body: JSON.stringify({ values, viewing: store.doc?.revision }),
     });
     const body = await response.json();
     if (!response.ok || !body.ok) {
       throw new Error((body && body.error && body.error.message) || `parameter update HTTP ${response.status}`);
     }
     if (store.doc) store.doc.overrides = body.overrides || store.doc.overrides;
-    renderParams();
+    postBoardState();
   } catch (error) {
     pushNote('error', `parameter update failed: ${error.message || error}`);
   }
@@ -1867,93 +1754,18 @@ function renderActivity() {
 // --------------------------------------------------------------------- selection panel
 
 function renderSelection() {
-  const host = byId('selection');
-  clearNode(host);
-  // A part or feature is a design target, not a fabricated BRep face.
-  const target = store.chatSelection;
-  const selection = store.selection;
-  const hover = store.hover;
-  const primary = selection || hover;
-  if (target && target.kind !== 'face') {
-    const head = el('div', 'sel-head');
-    const isFeature = target.kind === 'feature';
-    const title = el('span', 'sel-part', isFeature ? target.feature : target.part);
-    title.title = title.textContent;
-    head.append(el('span', 'tag on', isFeature ? 'Feature' : 'Part'), title);
-    host.appendChild(head);
-    renderSelectionChatAction(host);
-    renderPrintFaceAction();
-    renderBedPreview();
-    return;
-  }
-  if (!primary) {
-    host.appendChild(el('div', 'note', 'Select a face in the viewport or a feature in the model tree.'));
-    renderPrintFaceAction();
-    renderBedPreview();
-    return;
-  }
-
-  const head = el('div', 'sel-head');
-  head.appendChild(el('span', selection ? 'tag on' : 'tag', selection ? 'selected' : 'hover'));
-  head.appendChild(el('span', 'sel-part', primary.part || '-'));
-  head.appendChild(el('span', 'dim', primary.faceId != null ? `face ${primary.faceId}` : 'no face'));
-  host.appendChild(head);
-
-  if (primary.faceId == null) {
-    host.appendChild(el('div', 'note', 'this triangle has no BRep face id'));
-  } else if (primary.info) {
-    const refs = Array.isArray(primary.info.refs) ? primary.info.refs : [];
-    const refsBox = el('div', 'refs');
-    if (refs.length) {
-      for (const ref of refs) refsBox.appendChild(el('span', 'chip', ref));
-    } else {
-      refsBox.appendChild(el('span', 'dim', `face #${primary.faceId} (unnamed)`));
-    }
-    host.appendChild(refsBox);
-    host.appendChild(kvBlock([
-      ['area', primary.info.area != null ? `${fmt(primary.info.area, 2)} mm²` : '-'],
-      ['centroid', Array.isArray(primary.info.center) ? `${fmtPoint(primary.info.center)} mm` : '-'],
-    ]));
-  } else if (primary.error) {
-    host.appendChild(el('div', 'note bad', primary.error));
-  } else {
-    host.appendChild(el('div', 'note', 'loading face…'));
-  }
-
-  if (selection && hover && (hover.part !== selection.part || hover.faceId !== selection.faceId)) {
-    host.appendChild(el('div', 'sel-secondary',
-      `hover: ${hover.part || '-'} · ${hover.faceId != null ? `face ${hover.faceId}` : 'no face'}`));
-  }
-  renderSelectionChatAction(host);
+  const { chatSelection: target, selection, hover } = store;
+  const face = selection || hover;
+  const secondary = selection && hover && (hover.part !== selection.part || hover.faceId !== selection.faceId);
+  window.cadWorkspace.inspect({
+    target, face, selected: Boolean(selection), historical: isBrowsingHistory(),
+    replay: target?.kind === 'feature' && timelineFrames(target.part).some(frame => frame.id === target.feature),
+    area: face?.info?.area != null ? `${fmt(face.info.area, 2)} mm²` : '-',
+    centroid: Array.isArray(face?.info?.center) ? `${fmtPoint(face.info.center)} mm` : '-',
+    hover: secondary ? `hover: ${hover.part || '-'} · ${hover.faceId != null ? 'face ' + hover.faceId : 'no face'}` : null,
+  });
   renderPrintFaceAction();
   renderBedPreview();
-}
-
-function renderSelectionChatAction(host) {
-  const target = store.chatSelection;
-  if (!target) return;
-  const actions = el('div', 'selection-actions');
-  const ask = el('button', null, 'Ask in chat');
-  ask.type = 'button';
-  ask.addEventListener('click', () => {
-    setChatOpen(true, { focus: true });
-    postSelection(true);
-  });
-  const clear = el('button', null, 'Clear');
-  clear.type = 'button';
-  clear.title = 'Clear selection (Escape)';
-  clear.addEventListener('click', clearSelection);
-  actions.append(ask, clear);
-  if (target.kind === 'feature' && timelineFrames(target.part).some((frame) => frame.id === target.feature)) {
-    const replay = el('button', null, 'View build frame');
-    replay.type = 'button';
-    replay.addEventListener('click', () => jumpToFeature(target.feature));
-    actions.append(replay);
-  }
-  host.appendChild(actions);
-  host.appendChild(el('div', 'tiny dim', isBrowsingHistory()
-    ? `r${target.revision} · historical selection; return to current to edit`
-    : `r${target.revision} · attached to your next chat message`));
 }
 
 // --------------------------------------------------------------------- stress
@@ -4050,7 +3862,7 @@ async function createNewModel() {
   store.emptyError = '';
   renderEmptyModel();
   try {
-    const body = await postJson(apiPath('/api/new-model'), {});
+    const body = await postJson(apiPath('/api/new-model'), { viewing: store.doc?.revision });
     const revision = body && body.revision != null ? body.revision : null;
     const suffix = revision != null ? `r${revision}` : 'a new revision';
     const backupName = body && body.backup
@@ -4165,7 +3977,6 @@ function applyState(doc) {
   syncTimeline(doc);
   updateChrome();
   renderParts();
-  renderParams();
   renderPartInfo();
   renderFeatureLedger();
   renderDiagnostics();
@@ -4382,7 +4193,8 @@ function setChatOpen(open, options = {}) {
 
 function postBoardState() {
   const doc = store.doc;
-  if (doc) window.cadWorkspace.showBoard({ revision: doc.revision, head: doc.head, empty: revisionIsEmpty(doc) });
+  if (doc) window.cadWorkspace.showBoard({ revision: doc.revision, head: doc.head, empty: revisionIsEmpty(doc),
+    revisions: doc.revisions || [], parameters: doc.parameters || {}, overrides: doc.overrides || {} });
 }
 
 function setChatSelection(selection) {
@@ -4430,6 +4242,8 @@ function initChatShell() {
   byId('chat-close').addEventListener('click', () => setChatOpen(false, { focus: true }));
   byId('chat-reload').addEventListener('click', () => window.cadWorkspace.dispatchEvent(new Event('reload-chat')));
   window.cadWorkspace.addEventListener('clear-selection', clearSelection);
+  window.cadWorkspace.addEventListener('ask-selection', () => { setChatOpen(true, { focus: true }); postSelection(true); });
+  window.cadWorkspace.addEventListener('replay-selection', () => jumpToFeature(store.chatSelection?.feature));
   window.cadWorkspace.addEventListener('hide-parts', hidePartsFromChat);
   window.cadWorkspace.addEventListener('refresh-board', scheduleStateRefresh);
   byId('chat-root').addEventListener('keydown', event => {
@@ -4534,7 +4348,7 @@ async function rebuild() {
     const response = await fetch(apiPath('/api/build'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ force: true }),
+      body: JSON.stringify({ force: true, viewing: store.doc?.revision }),
     });
     const body = await response.json();
     if (!response.ok || !body.ok) {
@@ -4595,11 +4409,6 @@ function renderHistoryBanner() {
     if (rebuild) rebuild.title = 'rebuild the current script';
     if (fresh) fresh.title = 'Start a fresh script with an empty build(); older revisions stay in the selector';
   }
-}
-
-async function checkoutRevision() {
-  const value = Number(byId('revision-select').value);
-  await checkoutRevisionNumber(value);
 }
 
 // --------------------------------------------------------------------- ui bindings
@@ -4809,7 +4618,8 @@ function bindUi() {
   byId('btn-rebuild').addEventListener('click', rebuild);
   byId('btn-copy').addEventListener('click', copyContext);
   byId('banner-close').addEventListener('click', dismissBanner);
-  byId('revision-select').addEventListener('change', checkoutRevision);
+  window.cadWorkspace.addEventListener('view-revision', event => checkoutRevisionNumber(event.detail));
+  window.cadWorkspace.addEventListener('change-parameter', event => queueParam(event.detail.name, event.detail.value));
   byId('btn-new-model').addEventListener('click', onNewModelClick);
   byId('history-return').addEventListener('click', returnToCurrentRevision);
   byId('empty-open-chat').addEventListener('click', () => {

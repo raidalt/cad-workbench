@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
+import { SelectionInspector } from "@/components/selection-inspector";
+import { ModelControls } from "@/components/model-controls";
 import { ChatApp } from "@/components/chat/chat-app";
 import { workspace } from "@/lib/workspace";
 
@@ -22,5 +24,13 @@ export function WorkspacePanel() {
     workspace.addEventListener("reload-chat", reload);
     return () => workspace.removeEventListener("reload-chat", reload);
   }, []);
-  return host ? createPortal(<ChatApp key={generation} />, host) : null;
+  if (!host) return null;
+  const inspector = document.getElementById("selection");
+  const revisions = document.getElementById("revision-picker");
+  const parameters = document.getElementById("params-list");
+  return <>
+    {createPortal(<ChatApp key={generation} />, host)}
+    {inspector && createPortal(<SelectionInspector />, inspector)}
+    {revisions && parameters && <ModelControls revisions={revisions} parameters={parameters} />}
+  </>;
 }

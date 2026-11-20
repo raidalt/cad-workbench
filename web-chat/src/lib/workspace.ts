@@ -1,11 +1,29 @@
 import type { GeometrySelection } from "./chat-types";
 import { workspacePath } from "./history";
 
-export type Board = { revision: number | null; head: number | null; empty: boolean };
+export type Scalar = number | boolean | string | null;
+export type Parameter = { default: Scalar; value?: Scalar; min?: number; max?: number; unit?: string; description?: string };
+export type Board = {
+  revision: number | null; head: number | null; empty: boolean; revisions: { n: number; head: boolean }[];
+  parameters: Record<string, Parameter>; overrides: Record<string, Scalar>;
+};
+
+type Inspection = {
+  target: GeometrySelection | null; selected: boolean; historical: boolean; replay: boolean;
+  face: { part: string; faceId: number | null; error?: string; info?: { refs?: string[] } } | null;
+  area: string; centroid: string; hover: string | null;
+};
 
 class Workspace extends EventTarget {
   board: Board | null = null;
   selection: GeometrySelection | null = null;
+  inspection: Inspection | null = null;
+
+  inspect(details: Inspection) {
+    this.inspection = details;
+    this.dispatchEvent(new Event("inspect"));
+  }
+
   private stream?: EventSource;
 
   get events() {

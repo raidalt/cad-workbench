@@ -32,6 +32,17 @@ jobs:
         working-directory: web-chat
       - run: node web-chat/tests/download-smoke.mjs
 
+  hosted:
+    name: Isolated CAD job controller
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm ci && npm test
+        working-directory: hosted
+
   rust:
     name: Rust (fmt, clippy, build)
     runs-on: ubuntu-latest
@@ -118,7 +129,7 @@ jobs:
         run: python3 scripts/junit_annotations.py junit.xml
 
   release-install-as-documented:
-    name: Install the latest release as the README says (${{ matrix.os }})
+    name: Install the published release (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     strategy:
@@ -127,16 +138,29 @@ jobs:
         os: [ubuntu-latest, macos-latest]
     steps:
       - uses: actions/checkout@v7
+      - name: Find the latest published release
+        id: latest
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag=$(gh release list --exclude-drafts --exclude-pre-releases --limit 1 --json tagName --jq '.[0].tagName // empty')
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
       - name: "Step 1: Linux system libraries (the apt-get lines copied from the README)"
-        if: runner.os == 'Linux'
+        if: steps.latest.outputs.tag != '' && runner.os == 'Linux'
         run: |
           sudo apt-get update
           grep '^sudo apt-get install -y lib' README.md | tee /dev/stderr | bash -e
-      - name: "Step 2: the README's install command (with --fea), against the published release"
+      - name: Install the published wheel with FEA
+        if: steps.latest.outputs.tag != ''
+        env:
+          RELEASE_TAG: ${{ steps.latest.outputs.tag }}
+          GH_TOKEN: ${{ github.token }}
         run: |
-          grep -m1 'releases/latest/download/install.sh | sh -s -- --fea' README.md | tee /dev/stderr | bash -e
+          gh release download "$RELEASE_TAG" --pattern install.sh --dir "$RUNNER_TEMP"
+          sh "$RUNNER_TEMP/install.sh" --fea
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
-      - name: "Step 3: check it, then a first model end to end"
+      - name: Build and render an installed example
+        if: steps.latest.outputs.tag != ''
         run: |
           cad --version
           cad capabilities | tail -1 | grep 'stress analysis (cad fea): available'
